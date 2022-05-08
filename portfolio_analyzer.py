@@ -107,12 +107,14 @@ class PortfolioAnalyzer:
 
         # calculate daily return
         col_array = [('daily_return_pct', x) for x in ticker_list]
+        n_tickers = len(ticker_list)
         yf_df[col_array] = np.zeros_like(yf_df.iloc[:, ind_array].values)
-        yf_df.iloc[1:, -3:] = np.round((yf_df.iloc[1:, ind_array].values / yf_df.iloc[:-1, :3].values - 1) * 100, 2)
+        yf_df.iloc[1:, -n_tickers:] = \
+            np.round((yf_df.iloc[1:, ind_array].values / yf_df.iloc[:-1, :n_tickers].values - 1) * 100, 2)
 
         # calculate cumulative return
         col_array = [('cumulative_return_pct', x) for x in ticker_list]
-        yf_df[col_array] = (np.nancumprod(1 + yf_df.iloc[:, -3:].values / 100, axis=0) - 1) * 100
+        yf_df[col_array] = (np.nancumprod(1 + yf_df.iloc[:, -n_tickers:].values / 100, axis=0) - 1) * 100
 
         return yf_df, ticker_list
 
