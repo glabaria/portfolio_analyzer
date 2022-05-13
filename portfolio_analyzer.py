@@ -188,6 +188,69 @@ class PortfolioAnalyzer:
         df[cum_return_column_name] = (np.nancumprod(1 + df[daily_return_column_name].values / 100, axis=0) - 1) * 100
         return df
 
+    @staticmethod
+    def calculate_sharpe_ratio(df, daily_return_column_name='daily_return_pct'):
+        """
+        Function to calculate the sharpe_ratio := (Portfolio return - risk free return) / Std(Portfolio return).  We
+        calculate the monthly Sharpe ratio by
+            S_m := < Re_m > / std(Re_m)
+        where < Re_m > is the average monthly excess return of the portfolio, and std(Re_m) is the std of the monthly
+        excess return of the portfolio.  Here, the monthly excess return for the i-th month is given by
+        Re_mi = Rp_mi - Rrf_mi where Rp_mi is the cumulative portfolio return for the i-th month and Rrf_mi is the
+        monthly risk free return (the 13 week US Treasury Bill is used for the monthly risk free return).  The Sharpe
+        ratio reported here is the annualized Sharpe ratio which is given by
+            S_a := sqrt(12) * S_m
+
+        :param df:  Dataframe containing the portfolio daily returns
+        :param daily_return_column_name:
+        :return:
+        """
+
+        three_month_tbill_df = yf.Ticker('^irx').history(start=df.Date.min())[['Close']]\
+            .rename(columns={'Close': 'yield'})
+
+        ticker_list = None
+        daily_excess_return_column_name = ['daily_excess_return']
+        cumulative_return_pct_column_name = ['cumulative_return_pct']
+        sharpe_ratio_column_name = ['sharpe_ratio']
+        # If Dataframe is multi-index, turn the three-month T-bill Dataframe and other appropriate columns to
+        # multi-index
+        if type(df.columns.values[0]) == tuple:
+            three_month_tbill_df.columns = pd.MultiIndex.from_tuples([('yield', '^irx')])
+            ticker_list = [y for x, y in df.columns.values if x == 'cumulative_return_pct']
+            daily_excess_return_column_name = [(daily_excess_return_column_name[0], x) for x in ticker_list]
+            cumulative_return_pct_column_name = [(cumulative_return_pct_column_name[0], x) for x in ticker_list]
+            sharpe_ratio_column_name = [(sharpe_ratio_column_name[0], x) for x in ticker_list]
+
+        # get monthly returns
+        df = df.set_index('Date')
+        df = df.join(three_month_tbill_df, how='inner')
+
+        df[daily_excess_return_column_name] = df[[daily_return_column_name]] - df['yield'].values.reshape(-1, 1) / 365
+        df_cum_return_month = df[daily_excess_return_column_name]\
+            .groupby([lambda x: (x.year, x.month)]).apply(lambda x: (np.nanprod(1 + x / 100, axis=0) - 1) * 100)
+        df_cum_return_month = pd.DataFrame(df_cum_return_month.to_list(), columns=cumulative_return_pct_column_name,
+                                           index=df_cum_return_month.index)
+
+        # get std of monthly returns for each year
+        df_cum_return_std = df_cum_return_month.groupby([lambda x: x[0]])\
+            .apply(lambda x: np.std(x, axis=0))[cumulative_return_pct_column_name]\
+            .rename(columns={'cumulative_return_pct': 'monthly_return_std'} if ticker_list is None
+                    else {x: ('monthly_return_std', x[1]) for x in cumulative_return_pct_column_name})
+
+        # get average monthly returns for each year
+        df_cum_return_month = df_cum_return_month.groupby(lambda x: x[0]).mean()\
+            .rename(columns={'cumulative_return_pct': 'avg_cumulative_monthly_return'} if ticker_list is None
+                    else {x: ('avg_cumulative_monthly_return', x[1]) for x in cumulative_return_pct_column_name})
+
+        df_sharpe = df_cum_return_month.join(df_cum_return_std, how='inner')
+        if ticker_list is not None:
+            df_sharpe.columns = pd.MultiIndex.from_tuples(df_sharpe.columns.values)
+        df_sharpe[sharpe_ratio_column_name[0] if ticker_list is None else sharpe_ratio_column_name] = \
+            df_sharpe['avg_cumulative_monthly_return'] / df_sharpe['monthly_return_std'] * np.sqrt(12)
+
+        return df_sharpe
+
     def run(self):
         transaction_df, portfolio_value_df = self.gather_data()
         portfolio_df = self.calculate_daily_returns(transaction_df, portfolio_value_df)
@@ -197,7 +260,7 @@ class PortfolioAnalyzer:
         benchmark_df.reset_index(inplace=True)
         portfolio_df, benchmark_df = self.ensure_equal_dates(portfolio_df, benchmark_df)
 
-        # For each period, find the cumulative return percentage
+        # For each period, find the cumulative return percentage and plot
         base_title = 'Portfolio performance since '
         base_file_name = 'portfolio_performance_'
         days_ago_list = [30, 90, 180, 365, 'ytd', -np.inf]
