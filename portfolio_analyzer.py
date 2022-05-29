@@ -148,6 +148,21 @@ class PortfolioAnalyzer:
         plt.tight_layout()
         plt.savefig(os.path.join(self.save_file_path, file_name))
 
+    def plot_sharpe_ratio(self, portfolio_sharpe_ratio_df, benchmark_sharpe_ratio_df):
+
+        df = portfolio_sharpe_ratio_df[['sharpe_ratio']].join(benchmark_sharpe_ratio_df['sharpe_ratio'])
+        df.rename(columns={'sharpe_ratio': 'Portfolio'}, inplace=True)
+        df = pd.melt(df.reset_index(), id_vars='index').rename(columns={'index': 'Year', 'variable': 'Ticker',
+                                                                        'value': 'Sharpe Ratio'})
+
+        plt.figure(figsize=(10, 7))
+        ax = sns.barplot(data=df, x='Year', y='Sharpe Ratio', hue='Ticker')
+        for container in ax.containers:
+            ax.bar_label(container, fmt='%.2f')
+        plt.tight_layout()
+        plt.title('Annualized Sharpe Ratio')
+        plt.savefig(os.path.join(self.save_file_path, 'sharpe_ratio.png'))
+
     @staticmethod
     def ensure_equal_dates(df1, df2):
         """
@@ -280,6 +295,11 @@ class PortfolioAnalyzer:
                                      file_name=base_file_name + file_name)
             else:
                 self.plot_return_pct(portfolio_df, benchmark_df, file_name=base_file_name + file_name)
+
+        # Calculate Sharpe ratio per year
+        portfolio_sharpe_ratio_df = self.calculate_sharpe_ratio(portfolio_df)
+        benchmark_sharpe_ratio_df = self.calculate_sharpe_ratio(benchmark_df)
+        self.plot_sharpe_ratio(portfolio_sharpe_ratio_df, benchmark_sharpe_ratio_df)
 
 
 def run_portfolio_analyzer():
