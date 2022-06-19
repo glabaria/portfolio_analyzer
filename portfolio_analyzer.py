@@ -266,6 +266,44 @@ class PortfolioAnalyzer:
 
         return df_sharpe
 
+    @staticmethod
+    def calculate_sliding_correlation(x, y, window_length=10):
+        if len(x) != len(y):
+            raise ValueError(f'Inputs x and y must have the same length.')
+        if window_length >= len(x) or window_length >= len(y):
+            raise ValueError(f'Inputs window must be at most the length of x and y.')
+
+        n_windows = len(x) - window_length + 1
+        sliding_corr = np.zeros(n_windows)
+        for window_ind in range(n_windows):
+            meanx = np.mean(x[window_ind:window_length - 1 + window_ind])
+            meany = np.mean(y[window_ind:window_length - 1 + window_ind])
+            numerator = np.sum((x[window_ind:window_length - 1 + window_ind] - meanx) *
+                               (y[window_ind:window_length - 1 + window_ind] - meany))
+            denominator = np.sum((x[window_ind:window_length - 1 + window_ind] - meanx) ** 2)
+            denominator *= np.sum((y[window_ind:window_length - 1 + window_ind] - meany) ** 2)
+            denominator = np.sqrt(denominator)
+            sliding_corr[window_ind] = numerator / denominator
+
+        return sliding_corr
+
+    def plot_sliding_correlation(self, df, window_length=10):
+
+        plt.figure(figsize=(14, 8))
+
+        for ticker in self.benchmark_ticker_list:
+            plt.plot(df[ticker.upper()].values, label=ticker.upper(), linewidth=2)
+        plt.legend(fontsize=14)
+        dates = df.Date.dt.strftime('%Y-%m-%d').values
+        plt.xticks(np.arange(0, len(dates), 5), dates[::5], rotation=90, fontsize=8)
+        plt.yticks(fontsize=12)
+        plt.xlabel(f'Date (each point representing window length {window_length} days)', fontsize=14)
+        plt.ylabel('Correlation', fontsize=14)
+        plt.title(f'Correlation to Benchmark (Window Length {window_length})', fontsize=14)
+        os.makedirs(self.save_file_path, exist_ok=True)
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.save_file_path, f'correlation_to_benchmark_window_{window_length}'))
+
     def run(self):
         transaction_df, portfolio_value_df = self.gather_data()
         portfolio_df = self.calculate_daily_returns(transaction_df, portfolio_value_df)
@@ -300,6 +338,19 @@ class PortfolioAnalyzer:
         portfolio_sharpe_ratio_df = self.calculate_sharpe_ratio(portfolio_df)
         benchmark_sharpe_ratio_df = self.calculate_sharpe_ratio(benchmark_df)
         self.plot_sharpe_ratio(portfolio_sharpe_ratio_df, benchmark_sharpe_ratio_df)
+
+        # Calculate portfolio correlations to each of the benchmark tickers
+        correlation_window = 10
+        correlation_array = np.zeros((len(portfolio_df) - correlation_window + 1, len(self.benchmark_ticker_list)))
+        for ind, benchmark_ticker in enumerate(self.benchmark_ticker_list):
+            correlation_array[:, ind] = \
+                self.calculate_sliding_correlation(portfolio_df['cumulative_return_pct'].values,
+                                                   benchmark_df['cumulative_return_pct']
+                                                   [benchmark_ticker.upper()].values,
+                                                   correlation_window)
+        correlation_df = pd.DataFrame(correlation_array, columns=[x.upper() for x in self.benchmark_ticker_list])
+        correlation_df.insert(0, 'Date', portfolio_df.Date.values[:len(portfolio_df) - correlation_window + 1])
+        self.plot_sliding_correlation(correlation_df, window_length=correlation_window)
 
 
 def run_portfolio_analyzer():
