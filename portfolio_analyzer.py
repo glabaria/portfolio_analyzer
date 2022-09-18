@@ -316,9 +316,10 @@ class PortfolioAnalyzer:
         # For each period, find the cumulative return percentage and plot
         base_title = 'Portfolio performance since '
         base_file_name = 'portfolio_performance_'
-        days_ago_list = [30, 90, 180, 365, 'ytd', -np.inf]
-        title_appendix_list = ['last month', 'three months ago', 'six months ago', 'one year ago', 'YTD', 'inception']
-        file_name_list = ['30_days', '90_days', '180_days', '365_days', 'ytd', 'inception']
+        days_ago_list = [30, 90, 180, 365, 730, 'ytd', -np.inf]
+        title_appendix_list = ['last month', 'three months ago', 'six months ago', 'one year ago', 'two years ago',
+                               'YTD', 'inception']
+        file_name_list = ['30_days', '90_days', '180_days', '365_days', '730_days', 'ytd', 'inception']
         min_date, max_date = portfolio_df.Date.values[0], portfolio_df.Date.values[-1]
         for days_ago, title_appendix, file_name in zip(days_ago_list, title_appendix_list, file_name_list):
             if days_ago != -np.inf:
