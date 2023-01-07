@@ -355,8 +355,8 @@ class PortfolioAnalyzer:
 
 
 def run_portfolio_analyzer():
-    transaction_csv_path = './transaction_data/'
-    save_file_path = './figures/'
+    transaction_csv_path = '../transaction_data/'
+    save_file_path = '../figures/'
     benchmark_ticker_list = ['dia', 'spy', 'qqq', 'vt']
     PortfolioAnalyzer(transaction_csv_path=transaction_csv_path, save_file_path=save_file_path,
                       benchmark_ticker_list=benchmark_ticker_list).run()
