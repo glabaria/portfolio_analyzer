@@ -3,7 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 
-from portfolio_analyzer import PortfolioAnalyzer, DEPOSIT_DESCRIPTION_LIST
+from portfolio_analyzer_tool.portfolio_analyzer import PortfolioAnalyzer
 
 
 class TestPortfolioAnalyzer(unittest.TestCase):

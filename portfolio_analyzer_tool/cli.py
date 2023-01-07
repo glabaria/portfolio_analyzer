@@ -1,5 +1,5 @@
 import argparse
-from portfolio_analyzer import PortfolioAnalyzer
+from portfolio_analyzer_tool.portfolio_analyzer import PortfolioAnalyzer
 
 
 def cli():
