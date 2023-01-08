@@ -22,6 +22,8 @@ def cli():
                              "Can be combined with multiple days: e.g., '30,90,180,ytd,inception,01/01/2020'\n"
                              "for comparing 30, 90, 180 days ago, year-to-date, inception, and since the start of 2020."
                         )
+    parser.add_argument("--sliding_corr", type=int, help="Number of days for the sliding correlation window")
+    parser.add_argument("--sharpe_ratio", action="store_true", help="Flag to calculate the sharpe ratio per year")
 
     args = parser.parse_args()
 
@@ -32,7 +34,8 @@ def cli():
     from_da_list = [30, 90, 180, 365, 730, 'ytd', -np.inf] if args.from_da is None else args.from_da.split(",")
 
     pa_obj = PortfolioAnalyzer(transaction_csv_path=args.input_dir, save_file_path=args.output_dir,
-                               benchmark_ticker_list=ticker_list, benchmark_startdate_list=from_da_list)
+                               benchmark_ticker_list=ticker_list, benchmark_startdate_list=from_da_list,
+                               sharp_ratio=args.sharpe_ratio, sliding_corr=args.sliding_corr)
     pa_obj.run()
 
 

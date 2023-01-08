@@ -13,11 +13,13 @@ IGNORE_LIST = ['INTRA-ACCOUNT TRANSFER']
 class PortfolioAnalyzer:
 
     def __init__(self, transaction_csv_path=None, save_file_path=None, benchmark_ticker_list=('dia', 'spy', 'qqq'),
-                 benchmark_startdate_list=None):
+                 benchmark_startdate_list=None, sliding_corr=None, sharp_ratio=None):
         self.transaction_csv_path = transaction_csv_path
         self.save_file_path = save_file_path
         self.benchmark_ticker_list = benchmark_ticker_list
         self.benchmark_startdate_list = benchmark_startdate_list
+        self.sliding_corr = sliding_corr
+        self.shape_ratio = sharp_ratio
         sns.set()
 
     def gather_data(self):
@@ -341,22 +343,24 @@ class PortfolioAnalyzer:
                 self.plot_return_pct(portfolio_df, benchmark_df, file_name=base_file_name + file_name)
 
         # Calculate Sharpe ratio per year
-        portfolio_sharpe_ratio_df = self.calculate_sharpe_ratio(portfolio_df)
-        benchmark_sharpe_ratio_df = self.calculate_sharpe_ratio(benchmark_df)
-        self.plot_sharpe_ratio(portfolio_sharpe_ratio_df, benchmark_sharpe_ratio_df)
+        if self.shape_ratio:
+            portfolio_sharpe_ratio_df = self.calculate_sharpe_ratio(portfolio_df)
+            benchmark_sharpe_ratio_df = self.calculate_sharpe_ratio(benchmark_df)
+            self.plot_sharpe_ratio(portfolio_sharpe_ratio_df, benchmark_sharpe_ratio_df)
 
         # Calculate portfolio correlations to each of the benchmark tickers
-        correlation_window = 10
-        correlation_array = np.zeros((len(portfolio_df) - correlation_window + 1, len(self.benchmark_ticker_list)))
-        for ind, benchmark_ticker in enumerate(self.benchmark_ticker_list):
-            correlation_array[:, ind] = \
-                self.calculate_sliding_correlation(portfolio_df['cumulative_return_pct'].values,
-                                                   benchmark_df['cumulative_return_pct']
-                                                   [benchmark_ticker.upper()].values,
-                                                   correlation_window)
-        correlation_df = pd.DataFrame(correlation_array, columns=[x.upper() for x in self.benchmark_ticker_list])
-        correlation_df.insert(0, 'Date', portfolio_df.Date.values[:len(portfolio_df) - correlation_window + 1])
-        self.plot_sliding_correlation(correlation_df, window_length=correlation_window)
+        if self.sliding_corr is not None:
+            correlation_window = self.sliding_corr
+            correlation_array = np.zeros((len(portfolio_df) - correlation_window + 1, len(self.benchmark_ticker_list)))
+            for ind, benchmark_ticker in enumerate(self.benchmark_ticker_list):
+                correlation_array[:, ind] = \
+                    self.calculate_sliding_correlation(portfolio_df['cumulative_return_pct'].values,
+                                                       benchmark_df['cumulative_return_pct']
+                                                       [benchmark_ticker.upper()].values,
+                                                       correlation_window)
+            correlation_df = pd.DataFrame(correlation_array, columns=[x.upper() for x in self.benchmark_ticker_list])
+            correlation_df.insert(0, 'Date', portfolio_df.Date.values[:len(portfolio_df) - correlation_window + 1])
+            self.plot_sliding_correlation(correlation_df, window_length=correlation_window)
 
 
 def run_portfolio_analyzer():
