@@ -12,10 +12,12 @@ IGNORE_LIST = ['INTRA-ACCOUNT TRANSFER']
 
 class PortfolioAnalyzer:
 
-    def __init__(self, transaction_csv_path=None, save_file_path=None, benchmark_ticker_list=('dia', 'spy', 'qqq')):
+    def __init__(self, transaction_csv_path=None, save_file_path=None, benchmark_ticker_list=('dia', 'spy', 'qqq'),
+                 benchmark_startdate_list=None):
         self.transaction_csv_path = transaction_csv_path
         self.save_file_path = save_file_path
         self.benchmark_ticker_list = benchmark_ticker_list
+        self.benchmark_startdate_list = benchmark_startdate_list
         sns.set()
 
     def gather_data(self):
@@ -316,21 +318,24 @@ class PortfolioAnalyzer:
         # For each period, find the cumulative return percentage and plot
         base_title = 'Portfolio performance since '
         base_file_name = 'portfolio_performance_'
-        days_ago_list = [30, 90, 180, 365, 730, 'ytd', -np.inf]
-        title_appendix_list = ['last month', 'three months ago', 'six months ago', 'one year ago', 'two years ago',
-                               'YTD', 'inception']
-        file_name_list = ['30_days', '90_days', '180_days', '365_days', '730_days', 'ytd', 'inception']
+        file_name_list = [f"{x}" if "/" not in x else x.replace("/", "-") for x in self.benchmark_startdate_list]
+        days_ago_list = [x if x != "inception" else -np.inf for x in self.benchmark_startdate_list]
         min_date, max_date = portfolio_df.Date.values[0], portfolio_df.Date.values[-1]
-        for days_ago, title_appendix, file_name in zip(days_ago_list, title_appendix_list, file_name_list):
+        for days_ago, file_name in zip(days_ago_list, file_name_list):
             if days_ago != -np.inf:
-                date_cutoff = max_date - pd.Timedelta(days=days_ago) if days_ago != 'ytd' \
-                    else pd.to_datetime(f'01/01/{datetime.date.today().year}', format='%m/%d/%Y')
+                if days_ago == "ytd":
+                    date_cutoff = pd.to_datetime(f'01/01/{datetime.date.today().year}', format='%m/%d/%Y')
+                elif "/" in days_ago:
+                    date_cutoff = pd.to_datetime(days_ago, format='%m/%d/%Y')
+                else:
+                    date_cutoff = max_date - pd.Timedelta(days=int(days_ago))
+
                 curr_portfolio_df = self.calculate_cumulative_returns_from_date(portfolio_df, date_cutoff)
                 curr_benchmark_df = \
                     self.calculate_cumulative_returns_from_date(benchmark_df, date_cutoff,
                                                                 cum_return_column_name=[('cumulative_return_pct', x)
                                                                                         for x in ticker_list])
-                self.plot_return_pct(curr_portfolio_df, curr_benchmark_df, title=base_title + title_appendix,
+                self.plot_return_pct(curr_portfolio_df, curr_benchmark_df, title=base_title,
                                      file_name=base_file_name + file_name)
             else:
                 self.plot_return_pct(portfolio_df, benchmark_df, file_name=base_file_name + file_name)
