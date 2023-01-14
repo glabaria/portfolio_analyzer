@@ -12,10 +12,24 @@ IGNORE_LIST = ['INTRA-ACCOUNT TRANSFER']
 
 class PortfolioAnalyzer:
 
-    def __init__(self, transaction_csv_path=None, save_file_path=None, benchmark_ticker_list=('dia', 'spy', 'qqq')):
-        self.transaction_csv_path = transaction_csv_path
+    def __init__(self, input_portfolio=None, save_file_path=None, benchmark_ticker_list=('dia', 'spy', 'qqq'),
+                 benchmark_startdate_list=None, sliding_corr=None, sharp_ratio=None):
+        self.transaction_csv_path = None
+        self.portfolio_ticker_list = None
+        self.portfolio_shares_list = None
+        # input portfolio can either be a path or a list of tickers
+        if os.path.exists(input_portfolio):
+            self.transaction_csv_path = input_portfolio
+        else:
+            # regex \S+ \d+,
+            x = input_portfolio.split(",")
+            self.portfolio_ticker_list = [y[0] for y in x.split(" ")]
+            self.portfolio_ticker_list = [int(y[1]) for y in x.split(" ")]
         self.save_file_path = save_file_path
         self.benchmark_ticker_list = benchmark_ticker_list
+        self.benchmark_startdate_list = benchmark_startdate_list
+        self.sliding_corr = sliding_corr
+        self.shape_ratio = sharp_ratio
         sns.set()
 
     def gather_data(self):
@@ -304,61 +318,78 @@ class PortfolioAnalyzer:
         plt.tight_layout()
         plt.savefig(os.path.join(self.save_file_path, f'correlation_to_benchmark_window_{window_length}'))
 
-    def run(self):
-        transaction_df, portfolio_value_df = self.gather_data()
-        portfolio_df = self.calculate_daily_returns(transaction_df, portfolio_value_df)
-        dates = portfolio_df.Date.dt.strftime('%Y-%m-%d').values
-        benchmark_df, ticker_list = \
-            self.calculate_daily_return_from_ticker(self.benchmark_ticker_list, start_date=dates[0], end_date=dates[-1])
-        benchmark_df.reset_index(inplace=True)
-        portfolio_df, benchmark_df = self.ensure_equal_dates(portfolio_df, benchmark_df)
+    def plot_return_pct_helper(self, portfolio_df, benchmark_df, benchmark_ticker_list):
+        """
+        Wrapper function for plotting the cumulative returns of the portfolio vs benchmark for each days ago interval
 
+        :param portfolio_df:
+        :param benchmark_df:
+        :param benchmark_ticker_list:
+        :return:
+        """
         # For each period, find the cumulative return percentage and plot
         base_title = 'Portfolio performance since '
         base_file_name = 'portfolio_performance_'
-        days_ago_list = [30, 90, 180, 365, 730, 'ytd', -np.inf]
-        title_appendix_list = ['last month', 'three months ago', 'six months ago', 'one year ago', 'two years ago',
-                               'YTD', 'inception']
-        file_name_list = ['30_days', '90_days', '180_days', '365_days', '730_days', 'ytd', 'inception']
+        file_name_list = [f"{x}" if "/" not in x else x.replace("/", "-") for x in self.benchmark_startdate_list]
+        days_ago_list = [x if x != "inception" else -np.inf for x in self.benchmark_startdate_list]
         min_date, max_date = portfolio_df.Date.values[0], portfolio_df.Date.values[-1]
-        for days_ago, title_appendix, file_name in zip(days_ago_list, title_appendix_list, file_name_list):
+        for days_ago, file_name in zip(days_ago_list, file_name_list):
             if days_ago != -np.inf:
-                date_cutoff = max_date - pd.Timedelta(days=days_ago) if days_ago != 'ytd' \
-                    else pd.to_datetime(f'01/01/{datetime.date.today().year}', format='%m/%d/%Y')
+                if days_ago == "ytd":
+                    date_cutoff = pd.to_datetime(f'01/01/{datetime.date.today().year}', format='%m/%d/%Y')
+                elif "/" in days_ago:
+                    date_cutoff = pd.to_datetime(days_ago, format='%m/%d/%Y')
+                else:
+                    date_cutoff = max_date - pd.Timedelta(days=int(days_ago))
+
                 curr_portfolio_df = self.calculate_cumulative_returns_from_date(portfolio_df, date_cutoff)
                 curr_benchmark_df = \
                     self.calculate_cumulative_returns_from_date(benchmark_df, date_cutoff,
                                                                 cum_return_column_name=[('cumulative_return_pct', x)
-                                                                                        for x in ticker_list])
-                self.plot_return_pct(curr_portfolio_df, curr_benchmark_df, title=base_title + title_appendix,
+                                                                                        for x in benchmark_ticker_list])
+                self.plot_return_pct(curr_portfolio_df, curr_benchmark_df, title=base_title,
                                      file_name=base_file_name + file_name)
             else:
                 self.plot_return_pct(portfolio_df, benchmark_df, file_name=base_file_name + file_name)
 
+    def run(self):
+        transaction_df, portfolio_value_df = self.gather_data()
+        portfolio_df = self.calculate_daily_returns(transaction_df, portfolio_value_df)
+        dates = portfolio_df.Date.dt.strftime('%Y-%m-%d').values
+        benchmark_df, benchmark_ticker_list = \
+            self.calculate_daily_return_from_ticker(self.benchmark_ticker_list, start_date=dates[0], end_date=dates[-1])
+        benchmark_df.reset_index(inplace=True)
+        portfolio_df, benchmark_df = self.ensure_equal_dates(portfolio_df, benchmark_df)
+
+        # Plot the cumulative return percentage for each days ago interval
+        self.plot_return_pct_helper(portfolio_df, benchmark_df, benchmark_ticker_list)
+
         # Calculate Sharpe ratio per year
-        portfolio_sharpe_ratio_df = self.calculate_sharpe_ratio(portfolio_df)
-        benchmark_sharpe_ratio_df = self.calculate_sharpe_ratio(benchmark_df)
-        self.plot_sharpe_ratio(portfolio_sharpe_ratio_df, benchmark_sharpe_ratio_df)
+        if self.shape_ratio:
+            portfolio_sharpe_ratio_df = self.calculate_sharpe_ratio(portfolio_df)
+            benchmark_sharpe_ratio_df = self.calculate_sharpe_ratio(benchmark_df)
+            self.plot_sharpe_ratio(portfolio_sharpe_ratio_df, benchmark_sharpe_ratio_df)
 
         # Calculate portfolio correlations to each of the benchmark tickers
-        correlation_window = 10
-        correlation_array = np.zeros((len(portfolio_df) - correlation_window + 1, len(self.benchmark_ticker_list)))
-        for ind, benchmark_ticker in enumerate(self.benchmark_ticker_list):
-            correlation_array[:, ind] = \
-                self.calculate_sliding_correlation(portfolio_df['cumulative_return_pct'].values,
-                                                   benchmark_df['cumulative_return_pct']
-                                                   [benchmark_ticker.upper()].values,
-                                                   correlation_window)
-        correlation_df = pd.DataFrame(correlation_array, columns=[x.upper() for x in self.benchmark_ticker_list])
-        correlation_df.insert(0, 'Date', portfolio_df.Date.values[:len(portfolio_df) - correlation_window + 1])
-        self.plot_sliding_correlation(correlation_df, window_length=correlation_window)
+        if self.sliding_corr is not None:
+            correlation_window = self.sliding_corr
+            correlation_array = np.zeros((len(portfolio_df) - correlation_window + 1, len(self.benchmark_ticker_list)))
+            for ind, benchmark_ticker in enumerate(self.benchmark_ticker_list):
+                correlation_array[:, ind] = \
+                    self.calculate_sliding_correlation(portfolio_df['cumulative_return_pct'].values,
+                                                       benchmark_df['cumulative_return_pct']
+                                                       [benchmark_ticker.upper()].values,
+                                                       correlation_window)
+            correlation_df = pd.DataFrame(correlation_array, columns=[x.upper() for x in self.benchmark_ticker_list])
+            correlation_df.insert(0, 'Date', portfolio_df.Date.values[:len(portfolio_df) - correlation_window + 1])
+            self.plot_sliding_correlation(correlation_df, window_length=correlation_window)
 
 
 def run_portfolio_analyzer():
     transaction_csv_path = '../transaction_data/'
     save_file_path = '../figures/'
     benchmark_ticker_list = ['dia', 'spy', 'qqq', 'vt']
-    PortfolioAnalyzer(transaction_csv_path=transaction_csv_path, save_file_path=save_file_path,
+    PortfolioAnalyzer(input_portfolio=transaction_csv_path, save_file_path=save_file_path,
                       benchmark_ticker_list=benchmark_ticker_list).run()
 
 
