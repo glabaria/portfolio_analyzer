@@ -6,8 +6,12 @@ from portfolio_analyzer_tool.portfolio_analyzer import PortfolioAnalyzer
 
 def cli():
     parser = argparse.ArgumentParser(description="Portfolio Analyzer")
-    parser.add_argument("-i", "--input_dir", type=str,
-                        help="Path to directory which contains the 'chart.csv' and 'transactions_{year}.csv' files")
+    parser.add_argument("-p", "--portfolio", type=str,
+                        help="Path to directory which contains the 'chart.csv' and 'transactions_{year}.csv' files for"
+                             "the portfolio;"
+                             "or input a list of tickers followed by the share amount to form a portfolio: "
+                             "e.g., 'aapl 100,msft 200' for a portfolio consisting of 100 of aapl shares and 200 "
+                             "of msft shares.")
     parser.add_argument("-o", "--output_dir", type=str,
                         help="Path to directory to save results.  Defaults to current working directory.")
     parser.add_argument("-b", "--benchmark", action="store_true", help="Flag to benchmark portfolio")
@@ -36,7 +40,7 @@ def cli():
     # get days to compare
     from_da_list = [30, 90, 180, 365, 730, 'ytd', -np.inf] if args.from_da is None else args.from_da.split(",")
 
-    pa_obj = PortfolioAnalyzer(transaction_csv_path=args.input_dir, save_file_path=output_dir,
+    pa_obj = PortfolioAnalyzer(input_portfolio=args.portfolio, save_file_path=output_dir,
                                benchmark_ticker_list=ticker_list, benchmark_startdate_list=from_da_list,
                                sharp_ratio=args.sharpe_ratio, sliding_corr=args.sliding_corr)
     pa_obj.run()

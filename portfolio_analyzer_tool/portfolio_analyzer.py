@@ -12,9 +12,19 @@ IGNORE_LIST = ['INTRA-ACCOUNT TRANSFER']
 
 class PortfolioAnalyzer:
 
-    def __init__(self, transaction_csv_path=None, save_file_path=None, benchmark_ticker_list=('dia', 'spy', 'qqq'),
+    def __init__(self, input_portfolio=None, save_file_path=None, benchmark_ticker_list=('dia', 'spy', 'qqq'),
                  benchmark_startdate_list=None, sliding_corr=None, sharp_ratio=None):
-        self.transaction_csv_path = transaction_csv_path
+        self.transaction_csv_path = None
+        self.portfolio_ticker_list = None
+        self.portfolio_shares_list = None
+        # input portfolio can either be a path or a list of tickers
+        if os.path.exists(input_portfolio):
+            self.transaction_csv_path = input_portfolio
+        else:
+            # regex \S+ \d+,
+            x = input_portfolio.split(",")
+            self.portfolio_ticker_list = [y[0] for y in x.split(" ")]
+            self.portfolio_ticker_list = [int(y[1]) for y in x.split(" ")]
         self.save_file_path = save_file_path
         self.benchmark_ticker_list = benchmark_ticker_list
         self.benchmark_startdate_list = benchmark_startdate_list
@@ -308,15 +318,15 @@ class PortfolioAnalyzer:
         plt.tight_layout()
         plt.savefig(os.path.join(self.save_file_path, f'correlation_to_benchmark_window_{window_length}'))
 
-    def run(self):
-        transaction_df, portfolio_value_df = self.gather_data()
-        portfolio_df = self.calculate_daily_returns(transaction_df, portfolio_value_df)
-        dates = portfolio_df.Date.dt.strftime('%Y-%m-%d').values
-        benchmark_df, ticker_list = \
-            self.calculate_daily_return_from_ticker(self.benchmark_ticker_list, start_date=dates[0], end_date=dates[-1])
-        benchmark_df.reset_index(inplace=True)
-        portfolio_df, benchmark_df = self.ensure_equal_dates(portfolio_df, benchmark_df)
+    def plot_return_pct_helper(self, portfolio_df, benchmark_df, benchmark_ticker_list):
+        """
+        Wrapper function for plotting the cumulative returns of the portfolio vs benchmark for each days ago interval
 
+        :param portfolio_df:
+        :param benchmark_df:
+        :param benchmark_ticker_list:
+        :return:
+        """
         # For each period, find the cumulative return percentage and plot
         base_title = 'Portfolio performance since '
         base_file_name = 'portfolio_performance_'
@@ -336,11 +346,23 @@ class PortfolioAnalyzer:
                 curr_benchmark_df = \
                     self.calculate_cumulative_returns_from_date(benchmark_df, date_cutoff,
                                                                 cum_return_column_name=[('cumulative_return_pct', x)
-                                                                                        for x in ticker_list])
+                                                                                        for x in benchmark_ticker_list])
                 self.plot_return_pct(curr_portfolio_df, curr_benchmark_df, title=base_title,
                                      file_name=base_file_name + file_name)
             else:
                 self.plot_return_pct(portfolio_df, benchmark_df, file_name=base_file_name + file_name)
+
+    def run(self):
+        transaction_df, portfolio_value_df = self.gather_data()
+        portfolio_df = self.calculate_daily_returns(transaction_df, portfolio_value_df)
+        dates = portfolio_df.Date.dt.strftime('%Y-%m-%d').values
+        benchmark_df, benchmark_ticker_list = \
+            self.calculate_daily_return_from_ticker(self.benchmark_ticker_list, start_date=dates[0], end_date=dates[-1])
+        benchmark_df.reset_index(inplace=True)
+        portfolio_df, benchmark_df = self.ensure_equal_dates(portfolio_df, benchmark_df)
+
+        # Plot the cumulative return percentage for each days ago interval
+        self.plot_return_pct_helper(portfolio_df, benchmark_df, benchmark_ticker_list)
 
         # Calculate Sharpe ratio per year
         if self.shape_ratio:
@@ -367,7 +389,7 @@ def run_portfolio_analyzer():
     transaction_csv_path = '../transaction_data/'
     save_file_path = '../figures/'
     benchmark_ticker_list = ['dia', 'spy', 'qqq', 'vt']
-    PortfolioAnalyzer(transaction_csv_path=transaction_csv_path, save_file_path=save_file_path,
+    PortfolioAnalyzer(input_portfolio=transaction_csv_path, save_file_path=save_file_path,
                       benchmark_ticker_list=benchmark_ticker_list).run()
 
 
