@@ -6,7 +6,6 @@ from portfolio_analyzer_tool.portfolio_analyzer import PortfolioAnalyzer
 
 def cli():
     parser = argparse.ArgumentParser(description="Portfolio Analyzer")
-    # TODO: add support for arbitrary portfolio
     parser.add_argument("-p", "--portfolio", type=str,
                         help="Path to directory which contains the 'chart.csv' and 'transactions_{year}.csv' files for"
                              "the portfolio;"

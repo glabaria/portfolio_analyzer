@@ -44,8 +44,8 @@ class TestPortfolioAnalyzer(unittest.TestCase):
                                            -5.124304499,
                                            -3.693109306])
 
-        test_portfolio_value_df = PortfolioAnalyzer.calculate_daily_returns(self.transaction_df,
-                                                                            self.portfolio_value_df)
+        test_portfolio_value_df = PortfolioAnalyzer.calculate_daily_returns_tda(self.transaction_df,
+                                                                                self.portfolio_value_df)
         test_cum_daily_return_array = test_portfolio_value_df["cumulative_return_pct"].values
         np.testing.assert_array_almost_equal(cum_daily_return_array, test_cum_daily_return_array, 2)
 

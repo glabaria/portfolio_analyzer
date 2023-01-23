@@ -17,14 +17,14 @@ class PortfolioAnalyzer:
         self.transaction_csv_path = None
         self.portfolio_ticker_list = None
         self.portfolio_shares_list = None
+        self.portfolio_dict = None
         # input portfolio can either be a path or a list of tickers
         if os.path.exists(input_portfolio):
             self.transaction_csv_path = input_portfolio
         else:
             # regex \S+ \d+,
             x = input_portfolio.split(",")
-            self.portfolio_ticker_list = [y[0] for y in x.split(" ")]
-            self.portfolio_ticker_list = [int(y[1]) for y in x.split(" ")]
+            self.portfolio_dict = {y.split(" ")[0].upper(): float(y.split(" ")[1]) for y in x}
         self.save_file_path = save_file_path
         self.benchmark_ticker_list = benchmark_ticker_list
         self.benchmark_startdate_list = benchmark_startdate_list
@@ -55,7 +55,7 @@ class PortfolioAnalyzer:
         return transaction_df, portfolio_value_df
 
     @staticmethod
-    def calculate_daily_returns(transaction_df, portfolio_value_df):
+    def calculate_daily_returns_tda(transaction_df, portfolio_value_df):
         """
         Calculate daily returns from TD Ameritrade transaction and portfolio Dataframes
 
@@ -352,12 +352,61 @@ class PortfolioAnalyzer:
             else:
                 self.plot_return_pct(portfolio_df, benchmark_df, file_name=base_file_name + file_name)
 
+    @staticmethod
+    def calculate_daily_returns(df):
+        df_out = df
+        df_out.iloc[1:, :] = \
+            np.round((df_out.iloc[1:, :].values / df_out.iloc[:-1, :].values - 1) * 100, 2)
+        df_out.iloc[0, :] = 0  # zero-out first entry
+        return df_out
+
+    @staticmethod
+    def calculate_cumulative_returns(df):
+        return (np.nancumprod(1 + df.iloc[:].values / 100, axis=0) - 1) * 100
+
+    @staticmethod
+    def build_arbitrary_portfolio(portfolio_dict, start_date, end_date):
+        yf_df = yf.download(list(portfolio_dict.keys()), start=start_date, end=end_date, interval='1d')
+        market_value_df = yf_df["Adj Close"]
+        market_value_df = market_value_df.apply(lambda x: x * portfolio_dict[x.name])
+        market_value_df["account_value"] = market_value_df.sum(axis=1)
+        market_value_df["daily_return_pct"] = \
+            PortfolioAnalyzer.calculate_daily_returns(market_value_df[["account_value"]])
+        market_value_df["cumulative_return_pct"] = \
+            PortfolioAnalyzer.calculate_cumulative_returns(market_value_df[["daily_return_pct"]])
+        return market_value_df
+
+    def process_days_ago(self):
+        days_ago_list = [x if x != "inception" else -np.inf for x in self.benchmark_startdate_list]
+        max_date = datetime.date.today()
+        start_date_list = []
+        for days_ago in days_ago_list:
+            if days_ago != -np.inf:
+                if days_ago == "ytd":
+                    date_cutoff = pd.to_datetime(f'01/01/{datetime.date.today().year}', format='%m/%d/%Y')
+                elif "/" in days_ago:
+                    date_cutoff = pd.to_datetime(days_ago, format='%m/%d/%Y')
+                else:
+                    date_cutoff = pd.to_datetime(max_date) - pd.Timedelta(days=int(days_ago))
+                start_date_list.append(date_cutoff)
+            else:
+                start_date_list.append(days_ago)
+        return start_date_list
+
     def run(self):
-        transaction_df, portfolio_value_df = self.gather_data()
-        portfolio_df = self.calculate_daily_returns(transaction_df, portfolio_value_df)
-        dates = portfolio_df.Date.dt.strftime('%Y-%m-%d').values
+        if self.transaction_csv_path is not None:
+            transaction_df, portfolio_value_df = self.gather_data()
+            portfolio_df = self.calculate_daily_returns_tda(transaction_df, portfolio_value_df)
+            dates = portfolio_df.Date.dt.strftime('%Y-%m-%d').values
+        else:
+            days_ago_list = self.process_days_ago()
+            dates = np.sort(days_ago_list)
+            portfolio_df = self.build_arbitrary_portfolio(self.portfolio_dict, dates[0], datetime.date.today())
+            portfolio_df.reset_index(inplace=True)
+
         benchmark_df, benchmark_ticker_list = \
-            self.calculate_daily_return_from_ticker(self.benchmark_ticker_list, start_date=dates[0], end_date=dates[-1])
+            self.calculate_daily_return_from_ticker(self.benchmark_ticker_list, start_date=dates[0],
+                                                    end_date=datetime.date.today())
         benchmark_df.reset_index(inplace=True)
         portfolio_df, benchmark_df = self.ensure_equal_dates(portfolio_df, benchmark_df)
 
