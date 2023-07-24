@@ -14,7 +14,7 @@ def cli():
                              "of msft shares.")
     parser.add_argument("-o", "--output_dir", type=str,
                         help="Path to directory to save results.  Defaults to current working directory.")
-    parser.add_argument("-b", "--benchmark", action="store_true", help="Flag to benchmark portfolio")
+    parser.add_argument("-b", "--benchmark", action="store_true", help="Flag to benchmark portfolio", default=False)
     parser.add_argument("--tickers", type=str,
                         help="Ticker list to compare to separated by commas; e.g. 'spy,qqq'")
     parser.add_argument("--from_da", type=str,
@@ -29,6 +29,10 @@ def cli():
                         )
     parser.add_argument("--sliding_corr", type=int, help="Number of days for the sliding correlation window")
     parser.add_argument("--sharpe_ratio", action="store_true", help="Flag to calculate the sharpe ratio per year")
+    parser.add_argument("--fundamental", type=str, help="Outputs fundamental data specified by year or quarter."
+                                                        "Fundamental data requested should be comma separated.  "
+                                                        "For example, 'freeCashFlowYield,interestCoverage'")
+    parser.add_argument("--period", type=str, help="Period for fundamental data.  Options are 'quarter' or 'year'.")
 
     args = parser.parse_args()
 
@@ -42,7 +46,8 @@ def cli():
 
     pa_obj = PortfolioAnalyzer(input_portfolio=args.portfolio, save_file_path=output_dir,
                                benchmark_ticker_list=ticker_list, benchmark_startdate_list=from_da_list,
-                               sharp_ratio=args.sharpe_ratio, sliding_corr=args.sliding_corr)
+                               sharp_ratio=args.sharpe_ratio, sliding_corr=args.sliding_corr,
+                               fundamental_data=args.fundamental, period=args.period, benchmark_flag=args.benchmark)
     pa_obj.run()
 
 
