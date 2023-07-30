@@ -1,5 +1,7 @@
+# datasets
 KEY_METRICS = "key-metrics"
 INCOME_STATEMENT = "income-statement"
+BALANCE_SHEET_STATEMENT = "balance-sheet-statement"
 
 # index keys
 DATE = "date"
@@ -26,3 +28,16 @@ NET_INCOME = "netIncome"
 NET_INCOME_RATIO = "netIncomeRatio"
 EPS_DILUTED = "epsdiluted"
 WEIGHTED_AVERAGE_SHARES_OUTSTANDING_DILUTED = "weightedAverageShsOutDil"
+COST_OF_REVENUE = "costOfRevenue"
+OPERATING_EXPENSES = "operatingExpenses"
+
+# fields from BALANCE_SHEET_STATEMENT
+CASH_AND_CASH_EQUIVALENTS = "cashAndCashEquivalents"
+TOTAL_ASSETS = "totalAssets"
+TOTAL_CURRENT_LIABILITIES = "totalCurrentLiabilities"
+
+# calculated fields
+GROSS_MARGIN = "grossMargin"
+OPERATING_MARGIN = "operatingMargin"
+NET_MARGIN = "netMargin"
+ROCE = "roce"

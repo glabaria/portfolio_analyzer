@@ -8,7 +8,9 @@ import json
 from urllib.request import urlopen
 from typing import Optional, List
 
-from portfolio_analyzer_tool.constants import INDEX_KEYS_LIST, DATE, SYMBOL, YEAR
+from portfolio_analyzer_tool.constants import INDEX_KEYS_LIST, DATE, SYMBOL, YEAR, REVENUE, COST_OF_REVENUE, \
+    OPERATING_EXPENSES, TOTAL_ASSETS, TOTAL_CURRENT_LIABILITIES, GROSS_MARGIN, OPERATING_MARGIN, NET_MARGIN, \
+    GROSS_PROFIT_RATIO, OPERATING_INCOME_RATIO, NET_INCOME_RATIO
 from portfolio_analyzer_tool.enum_types import Datasets, datasets_to_metrics_list_dict
 
 
@@ -38,7 +40,7 @@ class Fundamentals:
         for ticker in self.ticker_list:
             json_data = self.get_jsonparsed_data(dataset, ticker, self.key)
             work_ticker_df = pd.DataFrame.from_records(json_data)
-            work_ticker_df = work_ticker_df[datasets_to_metrics_list_dict[Datasets(dataset)]]
+            work_ticker_df = work_ticker_df[INDEX_KEYS_LIST + datasets_to_metrics_list_dict[Datasets(dataset)]]
             if ticker_info_df is None:
                 ticker_info_df = work_ticker_df
             else:
@@ -86,6 +88,21 @@ class Fundamentals:
         response = urlopen(url, cafile=certifi.where())
         data = response.read().decode("utf-8")
         return json.loads(data)
+
+    def calculate_roce(self):
+        ebit = self.ticker_info_df[REVENUE] - self.ticker_info_df[COST_OF_REVENUE] - \
+               self.ticker_info_df[OPERATING_EXPENSES]
+        self.ticker_info_df["roce"] = \
+            ebit / (self.ticker_info_df[TOTAL_ASSETS] - self.ticker_info_df[TOTAL_CURRENT_LIABILITIES]) * 100
+
+    def calculate_margins(self):
+        self.ticker_info_df[GROSS_MARGIN] = (1 - self.ticker_info_df[GROSS_PROFIT_RATIO]) * 100
+        self.ticker_info_df[OPERATING_MARGIN] = (1 - self.ticker_info_df[OPERATING_INCOME_RATIO]) * 100
+        self.ticker_info_df[NET_MARGIN] = (1 - self.ticker_info_df[NET_INCOME_RATIO]) * 100
+
+    def calculate_metrics(self):
+        self.calculate_roce()
+        self.calculate_margins()
 
 
 def _debug():
