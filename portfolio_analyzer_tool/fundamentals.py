@@ -1,5 +1,5 @@
 import os
-
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
@@ -46,13 +46,17 @@ class Fundamentals:
         return ticker_info_df
 
     def plot_fundamentals(self, field_list: List[str], save_results_path: str):
-        for symbol in self.ticker_list:
+        for symbol in self.ticker_list + ["all"]:
             os.makedirs(os.path.join(save_results_path, symbol), exist_ok=True)
-            mask = self.ticker_info_df.index.get_level_values("symbol") == symbol
+            mask = self.ticker_info_df.index.get_level_values("symbol") == symbol if symbol != "all" \
+                else np.ones(len(self.ticker_info_df), dtype=bool)
             work_df = self.ticker_info_df.loc[mask].reset_index()
             for field in field_list:
                 plt.figure(figsize=(14, 8))
-                sns.barplot(data=work_df, x=YEAR, y=field, color="b")
+                if symbol != "all":
+                    sns.barplot(data=work_df, x=YEAR, y=field, color="b")
+                else:
+                    sns.barplot(data=work_df, x=YEAR, y=field, hue=SYMBOL)
                 plt.xticks(rotation=90)
                 plt.savefig(os.path.join(save_results_path, symbol, f"{field}.png"), dpi=300)
                 plt.close()
