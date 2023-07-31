@@ -2,6 +2,8 @@
 KEY_METRICS = "key-metrics"
 INCOME_STATEMENT = "income-statement"
 BALANCE_SHEET_STATEMENT = "balance-sheet-statement"
+CASH_FLOW_STATEMENT = "cash-flow-statement"
+ENTERPRISE_VALUES = "enterprise-values"
 
 # index keys
 DATE = "date"
@@ -36,8 +38,20 @@ CASH_AND_CASH_EQUIVALENTS = "cashAndCashEquivalents"
 TOTAL_ASSETS = "totalAssets"
 TOTAL_CURRENT_LIABILITIES = "totalCurrentLiabilities"
 
+# fields from CASH_FLOW_STATEMENT
+FREE_CASH_FLOW = "freeCashFlow"
+STOCK_BASED_COMPENSATION = "stockBasedCompensation"
+
+# fields from ENTERPRISE_VALUES
+MARKET_CAPITALIZATION = "marketCapitalization"
+
 # calculated fields
 GROSS_MARGIN = "grossMargin"
 OPERATING_MARGIN = "operatingMargin"
 NET_MARGIN = "netMargin"
 ROCE = "roce"
+FREE_CASH_FLOW_ADJUSTED = "freeCashFlowAdjusted"
+FREE_CASH_FLOW_YIELD_ADJUSTED = "freeCashFlowYieldAdjusted"
+
+# other constants
+FY = "FY"

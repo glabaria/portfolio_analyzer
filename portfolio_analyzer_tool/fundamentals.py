@@ -10,7 +10,8 @@ from typing import Optional, List
 
 from portfolio_analyzer_tool.constants import INDEX_KEYS_LIST, DATE, SYMBOL, YEAR, REVENUE, COST_OF_REVENUE, \
     OPERATING_EXPENSES, TOTAL_ASSETS, TOTAL_CURRENT_LIABILITIES, GROSS_MARGIN, OPERATING_MARGIN, NET_MARGIN, \
-    GROSS_PROFIT_RATIO, OPERATING_INCOME_RATIO, NET_INCOME_RATIO
+    GROSS_PROFIT, OPERATING_INCOME, NET_INCOME, FREE_CASH_FLOW_ADJUSTED, FREE_CASH_FLOW_YIELD_ADJUSTED, \
+    FREE_CASH_FLOW, STOCK_BASED_COMPENSATION, MARKET_CAPITALIZATION, PERIOD, FY
 from portfolio_analyzer_tool.enum_types import Datasets, datasets_to_metrics_list_dict
 
 
@@ -40,6 +41,8 @@ class Fundamentals:
         for ticker in self.ticker_list:
             json_data = self.get_jsonparsed_data(dataset, ticker, self.key)
             work_ticker_df = pd.DataFrame.from_records(json_data)
+            if PERIOD not in work_ticker_df.columns.values:
+                work_ticker_df[PERIOD] = FY
             work_ticker_df = work_ticker_df[INDEX_KEYS_LIST + datasets_to_metrics_list_dict[Datasets(dataset)]]
             if ticker_info_df is None:
                 ticker_info_df = work_ticker_df
@@ -58,7 +61,8 @@ class Fundamentals:
                 if symbol != "all":
                     sns.barplot(data=work_df, x=YEAR, y=field, color="b")
                 else:
-                    sns.barplot(data=work_df, x=YEAR, y=field, hue=SYMBOL)
+                    g = sns.lineplot(data=work_df, x=YEAR, y=field, hue=SYMBOL, marker=".", linewidth=2, markersize=25)
+                    g.set_xticks(work_df[YEAR].values, work_df[YEAR].values)
                 plt.xticks(rotation=90)
                 plt.savefig(os.path.join(save_results_path, symbol, f"{field}.png"), dpi=300)
                 plt.close()
@@ -96,13 +100,21 @@ class Fundamentals:
             ebit / (self.ticker_info_df[TOTAL_ASSETS] - self.ticker_info_df[TOTAL_CURRENT_LIABILITIES]) * 100
 
     def calculate_margins(self):
-        self.ticker_info_df[GROSS_MARGIN] = (1 - self.ticker_info_df[GROSS_PROFIT_RATIO]) * 100
-        self.ticker_info_df[OPERATING_MARGIN] = (1 - self.ticker_info_df[OPERATING_INCOME_RATIO]) * 100
-        self.ticker_info_df[NET_MARGIN] = (1 - self.ticker_info_df[NET_INCOME_RATIO]) * 100
+        self.ticker_info_df[GROSS_MARGIN] = self.ticker_info_df[GROSS_PROFIT] / self.ticker_info_df[REVENUE] * 100
+        self.ticker_info_df[OPERATING_MARGIN] = \
+            self.ticker_info_df[OPERATING_INCOME] / self.ticker_info_df[REVENUE] * 100
+        self.ticker_info_df[NET_MARGIN] = self.ticker_info_df[NET_INCOME] / self.ticker_info_df[REVENUE] * 100
+
+    def calculate_adjusted_fcf(self):
+        self.ticker_info_df[FREE_CASH_FLOW_ADJUSTED] = \
+            self.ticker_info_df[FREE_CASH_FLOW] - self.ticker_info_df[STOCK_BASED_COMPENSATION]
+        self.ticker_info_df[FREE_CASH_FLOW_YIELD_ADJUSTED] = \
+            self.ticker_info_df[FREE_CASH_FLOW_ADJUSTED] / self.ticker_info_df[MARKET_CAPITALIZATION] * 100
 
     def calculate_metrics(self):
         self.calculate_roce()
         self.calculate_margins()
+        self.calculate_adjusted_fcf()
 
 
 def _debug():
