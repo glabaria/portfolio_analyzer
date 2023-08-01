@@ -448,7 +448,7 @@ class PortfolioAnalyzer:
                 key = f.readlines()[0]
             fundamental_fields_list = self.fundamental_data.split(",")
             fundamentals = Fundamentals(list(self.portfolio_dict.keys()), key)
-            fundamentals.gather_all_datasets()
+            fundamentals.gather_all_datasets(period=self.period)
             fundamentals.calculate_metrics()
             fundamentals.plot_fundamentals(fundamental_fields_list, self.save_file_path)
 

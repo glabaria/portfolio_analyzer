@@ -11,7 +11,7 @@ from typing import Optional, List
 from portfolio_analyzer_tool.constants import INDEX_KEYS_LIST, DATE, SYMBOL, YEAR, REVENUE, COST_OF_REVENUE, \
     OPERATING_EXPENSES, TOTAL_ASSETS, TOTAL_CURRENT_LIABILITIES, GROSS_MARGIN, OPERATING_MARGIN, NET_MARGIN, \
     GROSS_PROFIT, OPERATING_INCOME, NET_INCOME, FREE_CASH_FLOW_ADJUSTED, FREE_CASH_FLOW_YIELD_ADJUSTED, \
-    FREE_CASH_FLOW, STOCK_BASED_COMPENSATION, MARKET_CAPITALIZATION, PERIOD, FY
+    FREE_CASH_FLOW, STOCK_BASED_COMPENSATION, MARKET_CAPITALIZATION, PERIOD, FY, ENTERPRISE_VALUES
 from portfolio_analyzer_tool.enum_types import Datasets, datasets_to_metrics_list_dict
 
 
@@ -24,7 +24,7 @@ class Fundamentals:
     def _consolidate_dates(self):
         self.ticker_info_df[YEAR] = pd.to_datetime(self.ticker_info_df.reset_index()[DATE]).dt.year.to_numpy()
 
-    def gather_all_datasets(self, dataset_list: Optional[List[str]] = None) -> None:
+    def gather_all_datasets(self, dataset_list: Optional[List[str]] = None, period: Optional[str] = None) -> None:
         """
         Gathers fundamental metrics for each ticker in self.ticker_list
 
@@ -32,14 +32,16 @@ class Fundamentals:
         """
 
         dataset_list = [dataset.value for dataset in Datasets] if dataset_list is None else dataset_list
-        ticker_info_df_list = [self.gather_dataset(dataset).set_index(INDEX_KEYS_LIST) for dataset in dataset_list]
+        period = "fy" if period is None else period
+        ticker_info_df_list = \
+            [self.gather_dataset(dataset, period).set_index(INDEX_KEYS_LIST) for dataset in dataset_list]
         self.ticker_info_df = ticker_info_df_list[0].join(ticker_info_df_list[1:], how="outer")
         self._consolidate_dates()
 
-    def gather_dataset(self, dataset: str) -> pd.DataFrame:
+    def gather_dataset(self, dataset: str, period: str) -> pd.DataFrame:
         ticker_info_df = None
         for ticker in self.ticker_list:
-            json_data = self.get_jsonparsed_data(dataset, ticker, self.key)
+            json_data = self.get_jsonparsed_data(dataset, ticker, self.key, period=period)
             work_ticker_df = pd.DataFrame.from_records(json_data)
             if PERIOD not in work_ticker_df.columns.values:
                 work_ticker_df[PERIOD] = FY

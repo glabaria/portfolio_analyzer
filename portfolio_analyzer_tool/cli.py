@@ -32,7 +32,7 @@ def cli():
     parser.add_argument("--fundamental", type=str, help="Outputs fundamental data specified by year or quarter."
                                                         "Fundamental data requested should be comma separated.  "
                                                         "For example, 'freeCashFlowYield,interestCoverage'")
-    parser.add_argument("--period", type=str, help="Period for fundamental data.  Options are 'quarter' or 'year'.")
+    parser.add_argument("--period", type=str, help="Period for fundamental data.  Options are 'quarter' or 'fy'.")
 
     args = parser.parse_args()
 
