@@ -373,7 +373,11 @@ class PortfolioAnalyzer:
     @staticmethod
     def build_arbitrary_portfolio(portfolio_dict, start_date, end_date):
         yf_df = yf.download(list(portfolio_dict.keys()), start=start_date, end=end_date, interval='1d')
-        market_value_df = yf_df["Adj Close"]
+        if len(portfolio_dict) > 1:
+            market_value_df = yf_df["Adj Close"]
+        else:
+            market_value_df = \
+                pd.DataFrame(yf_df["Adj Close"]).rename(columns={"Adj Close": list(portfolio_dict.keys())[0]})
         market_value_df = market_value_df.apply(lambda x: x * portfolio_dict[x.name])
         market_value_df["account_value"] = market_value_df.sum(axis=1)
         market_value_df["daily_return_pct"] = \
