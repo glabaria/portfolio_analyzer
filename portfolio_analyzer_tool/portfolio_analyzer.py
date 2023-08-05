@@ -9,6 +9,7 @@ import datetime
 from portfolio_analyzer_tool.fundamentals import Fundamentals
 
 DEPOSIT_DESCRIPTION_LIST = ['ELECTRONIC NEW ACCOUNT FUNDING', 'CLIENT REQUESTED ELECTRONIC FUNDING RECEIPT (FUNDS NOW)']
+WITHDRAW_DESCRIPTION_LIST = ["CLIENT REQUESTED ELECTRONIC FUNDING DISBURSEMENT (FUNDS NOW)"]
 IGNORE_LIST = ['INTRA-ACCOUNT TRANSFER']
 
 
@@ -72,12 +73,14 @@ class PortfolioAnalyzer:
         """
         # get dates and amount of any account deposits
         transaction_df['IS_DEPOSIT'] = transaction_df['DESCRIPTION'].apply(lambda x: x in DEPOSIT_DESCRIPTION_LIST)
+        transaction_df["IS_WITHDRAW"] = transaction_df["DESCRIPTION"].apply(lambda x: x in WITHDRAW_DESCRIPTION_LIST)
 
         portfolio_value_df = pd.merge(portfolio_value_df, transaction_df, how='left', left_on='Date', right_on='DATE')
         # delete last three rows, because they do not contain information
         portfolio_value_df = portfolio_value_df.iloc[:-3, :]
         portfolio_value_df.drop(columns=['DATE'], inplace=True)
         portfolio_value_df.loc[portfolio_value_df['IS_DEPOSIT'].isna(), 'IS_DEPOSIT'] = False
+        portfolio_value_df.loc[portfolio_value_df['IS_WITHDRAW'].isna(), 'IS_WITHDRAW'] = False
 
         # drop rows with intra-account transfer
         portfolio_value_df = portfolio_value_df.loc[~portfolio_value_df.DESCRIPTION.isin(IGNORE_LIST), :]
@@ -88,12 +91,17 @@ class PortfolioAnalyzer:
         portfolio_value_df['ACCOUNT_VALUE_EX_DEPOSIT'] = portfolio_value_df['Account value']
         portfolio_value_df.loc[portfolio_value_df['IS_DEPOSIT'].values, 'ACCOUNT_VALUE_EX_DEPOSIT'] -= \
             portfolio_value_df.loc[portfolio_value_df['IS_DEPOSIT'].values, 'AMOUNT'].values
+        # subtract withdraws since it is recorded as a negative number in the transaction history
+        # FIXME: change ACCOUNT_VALUE_EX_DEPSIT and associated variable names to something more informative since it now
+        #   has information on withdraws
+        portfolio_value_df.loc[portfolio_value_df["IS_WITHDRAW"].values, "ACCOUNT_VALUE_EX_DEPOSIT"] -= \
+            portfolio_value_df.loc[portfolio_value_df['IS_WITHDRAW'].values, 'AMOUNT'].values
         portfolio_value_unique_date = \
             portfolio_value_df.loc[~portfolio_value_df.duplicated(['Date']),
                                    ['Date', 'Account value', 'ACCOUNT_VALUE_EX_DEPOSIT']]
         portfolio_value_unique_date_with_deposit = \
-            portfolio_value_df.loc[portfolio_value_df.IS_DEPOSIT, ['Date', 'IS_DEPOSIT', 'Account value',
-                                                                   'ACCOUNT_VALUE_EX_DEPOSIT']]
+            portfolio_value_df.loc[portfolio_value_df.IS_DEPOSIT | portfolio_value_df.IS_WITHDRAW,
+                                   ['Date', 'IS_DEPOSIT', 'Account value', 'ACCOUNT_VALUE_EX_DEPOSIT']]
         portfolio_value_unique_date.loc[
             portfolio_value_unique_date.Date.isin(portfolio_value_unique_date_with_deposit.Date.values),
             ['Account value', 'ACCOUNT_VALUE_EX_DEPOSIT']] = \
