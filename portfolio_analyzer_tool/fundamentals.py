@@ -23,6 +23,8 @@ class Fundamentals:
 
     def _consolidate_dates(self):
         self.ticker_info_df[YEAR] = pd.to_datetime(self.ticker_info_df.reset_index()[DATE]).dt.year.to_numpy()
+        self.ticker_info_df[YEAR] = self.ticker_info_df.reset_index()[[YEAR, PERIOD]].apply(lambda x: f"{x[1]}-{x[0]}",
+                                                                                            axis=1).values
 
     def gather_all_datasets(self, dataset_list: Optional[List[str]] = None, period: Optional[str] = None) -> None:
         """
@@ -67,6 +69,7 @@ class Fundamentals:
             mask = self.ticker_info_df.index.get_level_values("symbol") == symbol if symbol != "all" \
                 else np.ones(len(self.ticker_info_df), dtype=bool)
             work_df = self.ticker_info_df.loc[mask].reset_index()
+            work_df = work_df.sort_values(by=DATE)
             for field in field_list:
                 plt.figure(figsize=(14, 8))
                 if symbol != "all":
