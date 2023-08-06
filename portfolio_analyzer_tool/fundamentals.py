@@ -30,26 +30,35 @@ class Fundamentals:
 
         :return:
         """
+        is_enterprise_values_requested = False
+        if dataset_list is None:
+            dataset_list = [dataset.value for dataset in Datasets if dataset != Datasets.ENTERPRISE_VALUES]
+        if Datasets.ENTERPRISE_VALUES in Datasets:
+            is_enterprise_values_requested = True
 
-        dataset_list = [dataset.value for dataset in Datasets] if dataset_list is None else dataset_list
         period = "fy" if period is None else period
-        ticker_info_df_list = \
-            [self.gather_dataset(dataset, period).set_index(INDEX_KEYS_LIST) for dataset in dataset_list]
-        self.ticker_info_df = ticker_info_df_list[0].join(ticker_info_df_list[1:], how="outer")
+
+        enterprise_value_df = None
+        ticker_info_df_list = []
+        for ticker in self.ticker_list:
+            if is_enterprise_values_requested:
+                enterprise_value_df = self.gather_dataset(ticker, Datasets.ENTERPRISE_VALUES.value, period)
+
+            curr_ticker_work_df = [self.gather_dataset(ticker, dataset, period) for dataset in dataset_list]
+            if enterprise_value_df is not None:
+                curr_ticker_work_df[0] = pd.merge(curr_ticker_work_df[0],
+                                                  enterprise_value_df[[MARKET_CAPITALIZATION, DATE]], on=[DATE])
+            curr_ticker_work_df = [df.set_index(INDEX_KEYS_LIST) for df in curr_ticker_work_df]
+            curr_ticker_work_df = curr_ticker_work_df[0].join(curr_ticker_work_df[1:], how="outer")
+            ticker_info_df_list.append(curr_ticker_work_df)
+
+        self.ticker_info_df = pd.concat(ticker_info_df_list, axis=0)
         self._consolidate_dates()
 
-    def gather_dataset(self, dataset: str, period: str) -> pd.DataFrame:
-        ticker_info_df = None
-        for ticker in self.ticker_list:
-            json_data = self.get_jsonparsed_data(dataset, ticker, self.key, period=period)
-            work_ticker_df = pd.DataFrame.from_records(json_data)
-            if PERIOD not in work_ticker_df.columns.values:
-                work_ticker_df[PERIOD] = FY
-            work_ticker_df = work_ticker_df[INDEX_KEYS_LIST + datasets_to_metrics_list_dict[Datasets(dataset)]]
-            if ticker_info_df is None:
-                ticker_info_df = work_ticker_df
-            else:
-                ticker_info_df = pd.concat([ticker_info_df, work_ticker_df], axis=0, ignore_index=True)
+    def gather_dataset(self, ticker: str, dataset: str, period: str) -> pd.DataFrame:
+        json_data = self.get_jsonparsed_data(dataset, ticker, self.key, period=period)
+        work_ticker_df = pd.DataFrame.from_records(json_data)
+        ticker_info_df = work_ticker_df[datasets_to_metrics_list_dict[Datasets(dataset)]]
         return ticker_info_df
 
     def plot_fundamentals(self, field_list: List[str], save_results_path: str):
