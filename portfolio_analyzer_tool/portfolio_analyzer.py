@@ -17,7 +17,7 @@ class PortfolioAnalyzer:
 
     def __init__(self, input_portfolio=None, save_file_path=None, benchmark_ticker_list=('dia', 'spy', 'qqq'),
                  benchmark_startdate_list=None, sliding_corr=None, sharp_ratio=None, fundamental_data=None,
-                 period=None, benchmark_flag=None):
+                 period=None, benchmark_flag=None, ttm_flag=None):
         self.transaction_csv_path = None
         self.portfolio_ticker_list = None
         self.portfolio_shares_list = None
@@ -37,6 +37,7 @@ class PortfolioAnalyzer:
         self.fundamental_data = fundamental_data
         self.period = period
         self.benchmark_flag = benchmark_flag
+        self.ttm_flag = ttm_flag
         sns.set()
 
     def gather_data(self):
@@ -461,8 +462,8 @@ class PortfolioAnalyzer:
             fundamental_fields_list = self.fundamental_data.split(",")
             fundamentals = Fundamentals(list(self.portfolio_dict.keys()), key)
             fundamentals.gather_all_datasets(period=self.period)
-            fundamentals.calculate_metrics()
-            fundamentals.plot_fundamentals(fundamental_fields_list, self.save_file_path)
+            fundamentals.calculate_metrics(ttm_flag=self.ttm_flag)
+            fundamentals.plot_fundamentals(fundamental_fields_list, self.save_file_path, ttm_flag=self.ttm_flag)
 
 
 def run_portfolio_analyzer():

@@ -33,6 +33,9 @@ def cli():
                                                         "Fundamental data requested should be comma separated.  "
                                                         "For example, 'freeCashFlowYield,interestCoverage'")
     parser.add_argument("--period", type=str, help="Period for fundamental data.  Options are 'quarter' or 'fy'.")
+    parser.add_argument("--ttm", action="store_true", help="When --period 'quarter' is used, this calculates the "
+                                                           "trailing twelve months for each fundamental metric "
+                                                           "requested", default=False)
 
     args = parser.parse_args()
 
@@ -47,7 +50,8 @@ def cli():
     pa_obj = PortfolioAnalyzer(input_portfolio=args.portfolio, save_file_path=output_dir,
                                benchmark_ticker_list=ticker_list, benchmark_startdate_list=from_da_list,
                                sharp_ratio=args.sharpe_ratio, sliding_corr=args.sliding_corr,
-                               fundamental_data=args.fundamental, period=args.period, benchmark_flag=args.benchmark)
+                               fundamental_data=args.fundamental, period=args.period, benchmark_flag=args.benchmark,
+                               ttm_flag=args.ttm)
     pa_obj.run()
 
 

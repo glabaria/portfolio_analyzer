@@ -11,7 +11,8 @@ from typing import Optional, List
 from portfolio_analyzer_tool.constants import INDEX_KEYS_LIST, DATE, SYMBOL, YEAR, REVENUE, COST_OF_REVENUE, \
     OPERATING_EXPENSES, TOTAL_ASSETS, TOTAL_CURRENT_LIABILITIES, GROSS_MARGIN, OPERATING_MARGIN, NET_MARGIN, \
     GROSS_PROFIT, OPERATING_INCOME, NET_INCOME, FREE_CASH_FLOW_ADJUSTED, FREE_CASH_FLOW_YIELD_ADJUSTED, \
-    FREE_CASH_FLOW, STOCK_BASED_COMPENSATION, MARKET_CAPITALIZATION, PERIOD, FY, ENTERPRISE_VALUES
+    FREE_CASH_FLOW, STOCK_BASED_COMPENSATION, MARKET_CAPITALIZATION, PERIOD, SUPPORTED_BASE_TTM_METRICS_LIST, \
+    SUPPORTED_TTM_METRICS
 from portfolio_analyzer_tool.enum_types import Datasets, datasets_to_metrics_list_dict
 
 
@@ -63,7 +64,7 @@ class Fundamentals:
         ticker_info_df = work_ticker_df[datasets_to_metrics_list_dict[Datasets(dataset)]]
         return ticker_info_df
 
-    def plot_fundamentals(self, field_list: List[str], save_results_path: str):
+    def plot_fundamentals(self, field_list: List[str], save_results_path: str, ttm_flag: bool = False):
         for symbol in self.ticker_list + ["all"]:
             os.makedirs(os.path.join(save_results_path, symbol), exist_ok=True)
             mask = self.ticker_info_df.index.get_level_values("symbol") == symbol if symbol != "all" \
@@ -78,7 +79,10 @@ class Fundamentals:
                     g = sns.lineplot(data=work_df, x=YEAR, y=field, hue=SYMBOL, marker=".", linewidth=2, markersize=25)
                     g.set_xticks(work_df[YEAR].values, work_df[YEAR].values)
                 plt.xticks(rotation=90)
-                plt.savefig(os.path.join(save_results_path, symbol, f"{field}.png"), dpi=300)
+                plt.title(f"{field}{'(TTM)' if ttm_flag and field in SUPPORTED_TTM_METRICS else ''}")
+                plt.savefig(os.path.join(save_results_path, symbol,
+                                         f"{field}{'_ttm' if ttm_flag and field in SUPPORTED_TTM_METRICS else ''}.png"),
+                            dpi=300)
                 plt.close()
 
     @staticmethod
@@ -107,6 +111,11 @@ class Fundamentals:
         data = response.read().decode("utf-8")
         return json.loads(data)
 
+    def calculate_ttm(self):
+        self.ticker_info_df = self.ticker_info_df.sort_values(by=DATE)
+        self.ticker_info_df[SUPPORTED_BASE_TTM_METRICS_LIST] = \
+            self.ticker_info_df[SUPPORTED_BASE_TTM_METRICS_LIST].rolling(4).sum()
+
     def calculate_roce(self):
         ebit = self.ticker_info_df[REVENUE] - self.ticker_info_df[COST_OF_REVENUE] - \
                self.ticker_info_df[OPERATING_EXPENSES]
@@ -125,7 +134,9 @@ class Fundamentals:
         self.ticker_info_df[FREE_CASH_FLOW_YIELD_ADJUSTED] = \
             self.ticker_info_df[FREE_CASH_FLOW_ADJUSTED] / self.ticker_info_df[MARKET_CAPITALIZATION] * 100
 
-    def calculate_metrics(self):
+    def calculate_metrics(self, ttm_flag=False):
+        if ttm_flag:
+            self.calculate_ttm()
         self.calculate_roce()
         self.calculate_margins()
         self.calculate_adjusted_fcf()
