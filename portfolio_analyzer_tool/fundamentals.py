@@ -12,7 +12,7 @@ from portfolio_analyzer_tool.constants import INDEX_KEYS_LIST, DATE, SYMBOL, YEA
     OPERATING_EXPENSES, TOTAL_ASSETS, TOTAL_CURRENT_LIABILITIES, GROSS_MARGIN, OPERATING_MARGIN, NET_MARGIN, \
     GROSS_PROFIT, OPERATING_INCOME, NET_INCOME, FREE_CASH_FLOW_ADJUSTED, FREE_CASH_FLOW_YIELD_ADJUSTED, \
     FREE_CASH_FLOW, STOCK_BASED_COMPENSATION, MARKET_CAPITALIZATION, PERIOD, SUPPORTED_BASE_TTM_METRICS_LIST, \
-    SUPPORTED_TTM_METRICS
+    SUPPORTED_TTM_METRICS_LIST
 from portfolio_analyzer_tool.enum_types import Datasets, datasets_to_metrics_list_dict
 
 
@@ -22,10 +22,11 @@ class Fundamentals:
         self.ticker_list = ticker_list
         self.key = key
 
-    def _consolidate_dates(self):
-        self.ticker_info_df[YEAR] = pd.to_datetime(self.ticker_info_df.reset_index()[DATE]).dt.year.to_numpy()
-        self.ticker_info_df[YEAR] = self.ticker_info_df.reset_index()[[YEAR, PERIOD]].apply(lambda x: f"{x[1]}-{x[0]}",
-                                                                                            axis=1).values
+    @staticmethod
+    def _consolidate_dates(df_list):
+        for df in df_list:
+            df[YEAR] = pd.to_datetime(df[DATE]).dt.year.to_numpy()
+            df[YEAR] = df[[YEAR, PERIOD]].apply(lambda x: f"{x[1]}-{x[0]}", axis=1).values
 
     def gather_all_datasets(self, dataset_list: Optional[List[str]] = None, period: Optional[str] = None) -> None:
         """
@@ -47,16 +48,22 @@ class Fundamentals:
             if is_enterprise_values_requested:
                 enterprise_value_df = self.gather_dataset(ticker, Datasets.ENTERPRISE_VALUES.value, period)
 
-            curr_ticker_work_df = [self.gather_dataset(ticker, dataset, period) for dataset in dataset_list]
+            curr_ticker_work_df_list = [self.gather_dataset(ticker, dataset, period) for dataset in dataset_list]
             if enterprise_value_df is not None:
-                curr_ticker_work_df[0] = pd.merge(curr_ticker_work_df[0],
-                                                  enterprise_value_df[[MARKET_CAPITALIZATION, DATE]], on=[DATE])
-            curr_ticker_work_df = [df.set_index(INDEX_KEYS_LIST) for df in curr_ticker_work_df]
-            curr_ticker_work_df = curr_ticker_work_df[0].join(curr_ticker_work_df[1:], how="outer")
+                # TODO: is there a better way to do this?  What happens if the DATE does not match up?
+                curr_ticker_work_df_list[0] = pd.merge(curr_ticker_work_df_list[0],
+                                                       enterprise_value_df[[MARKET_CAPITALIZATION, DATE]], on=[DATE])
+            self._consolidate_dates(curr_ticker_work_df_list)
+            curr_ticker_work_df_list = [df.set_index(INDEX_KEYS_LIST) for df in curr_ticker_work_df_list]
+
+            # drop DATE column from all but one dataset
+            curr_ticker_work_df_list = \
+                [df if i == 0 else df.drop(DATE, axis=1) for i, df in enumerate(curr_ticker_work_df_list)]
+
+            curr_ticker_work_df = curr_ticker_work_df_list[0].join(curr_ticker_work_df_list[1:], how="outer")
             ticker_info_df_list.append(curr_ticker_work_df)
 
         self.ticker_info_df = pd.concat(ticker_info_df_list, axis=0)
-        self._consolidate_dates()
 
     def gather_dataset(self, ticker: str, dataset: str, period: str) -> pd.DataFrame:
         json_data = self.get_jsonparsed_data(dataset, ticker, self.key, period=period)
@@ -79,9 +86,9 @@ class Fundamentals:
                     g = sns.lineplot(data=work_df, x=YEAR, y=field, hue=SYMBOL, marker=".", linewidth=2, markersize=25)
                     g.set_xticks(work_df[YEAR].values, work_df[YEAR].values)
                 plt.xticks(rotation=90)
-                plt.title(f"{field}{'(TTM)' if ttm_flag and field in SUPPORTED_TTM_METRICS else ''}")
+                plt.title(f"{field}{'(TTM)' if ttm_flag and field in SUPPORTED_TTM_METRICS_LIST else ''}")
                 plt.savefig(os.path.join(save_results_path, symbol,
-                                         f"{field}{'_ttm' if ttm_flag and field in SUPPORTED_TTM_METRICS else ''}.png"),
+                                         f"{field}{'_ttm' if ttm_flag and field in SUPPORTED_TTM_METRICS_LIST else ''}.png"),
                             dpi=300)
                 plt.close()
 
@@ -112,7 +119,7 @@ class Fundamentals:
         return json.loads(data)
 
     def calculate_ttm(self):
-        self.ticker_info_df = self.ticker_info_df.sort_values(by=DATE)
+        self.ticker_info_df = self.ticker_info_df.sort_values(by=YEAR)
         self.ticker_info_df[SUPPORTED_BASE_TTM_METRICS_LIST] = \
             self.ticker_info_df[SUPPORTED_BASE_TTM_METRICS_LIST].rolling(4).sum()
 
