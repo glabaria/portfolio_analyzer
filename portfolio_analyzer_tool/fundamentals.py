@@ -7,12 +7,13 @@ import certifi
 import json
 from urllib.request import urlopen
 from typing import Optional, List
+from collections import defaultdict
 
 from portfolio_analyzer_tool.constants import INDEX_KEYS_LIST, DATE, SYMBOL, YEAR, REVENUE, COST_OF_REVENUE, \
     OPERATING_EXPENSES, TOTAL_ASSETS, TOTAL_CURRENT_LIABILITIES, GROSS_MARGIN, OPERATING_MARGIN, NET_MARGIN, \
     GROSS_PROFIT, OPERATING_INCOME, NET_INCOME, FREE_CASH_FLOW_ADJUSTED, FREE_CASH_FLOW_YIELD_ADJUSTED, \
     FREE_CASH_FLOW, STOCK_BASED_COMPENSATION, MARKET_CAPITALIZATION, PERIOD, SUPPORTED_BASE_TTM_METRICS_LIST, \
-    SUPPORTED_TTM_METRICS_LIST
+    SUPPORTED_TTM_METRICS_LIST, YEAR_PERIOD, FY, QUARTER
 from portfolio_analyzer_tool.enum_types import Datasets, datasets_to_metrics_list_dict
 
 
@@ -26,7 +27,7 @@ class Fundamentals:
     def _consolidate_dates(df_list):
         for df in df_list:
             df[YEAR] = pd.to_datetime(df[DATE]).dt.year.to_numpy()
-            df[YEAR] = df[[YEAR, PERIOD]].apply(lambda x: f"{x[1]}-{x[0]}", axis=1).values
+            df[YEAR_PERIOD] = df[[YEAR, PERIOD]].apply(lambda x: f"{x[0]}-{x[1]}", axis=1).values
 
     def gather_all_datasets(self, dataset_list: Optional[List[str]] = None, period: Optional[str] = None) -> None:
         """
@@ -58,7 +59,7 @@ class Fundamentals:
 
             # drop DATE column from all but one dataset
             curr_ticker_work_df_list = \
-                [df if i == 0 else df.drop(DATE, axis=1) for i, df in enumerate(curr_ticker_work_df_list)]
+                [df if i == 0 else df.drop([DATE, YEAR], axis=1) for i, df in enumerate(curr_ticker_work_df_list)]
 
             curr_ticker_work_df = curr_ticker_work_df_list[0].join(curr_ticker_work_df_list[1:], how="outer")
             ticker_info_df_list.append(curr_ticker_work_df)
@@ -71,7 +72,8 @@ class Fundamentals:
         ticker_info_df = work_ticker_df[datasets_to_metrics_list_dict[Datasets(dataset)]]
         return ticker_info_df
 
-    def plot_fundamentals(self, field_list: List[str], save_results_path: str, ttm_flag: bool = False):
+    def plot_fundamentals(self, field_list: List[str], save_results_path: str, ttm_flag: bool = False,
+                          df_pct_years_ago: Optional[pd.DataFrame] = None):
         for symbol in self.ticker_list + ["all"]:
             os.makedirs(os.path.join(save_results_path, symbol), exist_ok=True)
             mask = self.ticker_info_df.index.get_level_values("symbol") == symbol if symbol != "all" \
@@ -81,20 +83,32 @@ class Fundamentals:
             for field in field_list:
                 plt.figure(figsize=(14, 8))
                 if symbol != "all":
-                    sns.barplot(data=work_df, x=YEAR, y=field, color="b")
+                    sns.barplot(data=work_df, x=YEAR_PERIOD, y=field, color="b")
                 else:
-                    g = sns.lineplot(data=work_df, x=YEAR, y=field, hue=SYMBOL, marker=".", linewidth=2, markersize=25)
-                    g.set_xticks(work_df[YEAR].values, work_df[YEAR].values)
+                    g = sns.lineplot(data=work_df, x=YEAR_PERIOD, y=field, hue=SYMBOL, marker=".", linewidth=2,
+                                     markersize=25)
+                    g.set_xticks(work_df[YEAR_PERIOD].values, work_df[YEAR_PERIOD].values)
                 plt.xticks(rotation=90)
                 plt.title(f"{field}{'(TTM)' if ttm_flag and field in SUPPORTED_TTM_METRICS_LIST else ''}")
+
+                # write statistics as text at the bottom of the plot
+                if symbol != "all":
+                    curr_stats = df_pct_years_ago.loc[symbol, ["years_ago", field]].values
+                    text_str = "% Change:\n"
+                    for row_ind in range(curr_stats.shape[0]):
+                        if np.isnan(curr_stats[row_ind, 1]):
+                            continue
+                        text_str += f"{int(curr_stats[row_ind, 0])} years: {curr_stats[row_ind, 1]:.2f}%\n"
+
+                    plt.gcf().text(0.3, 0.85, text_str)
                 plt.savefig(os.path.join(save_results_path, symbol,
                                          f"{field}{'_ttm' if ttm_flag and field in SUPPORTED_TTM_METRICS_LIST else ''}.png"),
-                            dpi=300)
+                            dpi=300, bbox_inches="tight")
                 plt.close()
 
     @staticmethod
     def get_jsonparsed_data(dataset_name: str, ticker: str, key: str,
-                            base_url: str ="https://financialmodelingprep.com/api/v3",
+                            base_url: str = "https://financialmodelingprep.com/api/v3",
                             **kwargs) -> dict:
         """
         Receive the content of from a url of the form f"{base_url}/{dataset_name}/{ticker}?apikey={key}".
@@ -119,7 +133,7 @@ class Fundamentals:
         return json.loads(data)
 
     def calculate_ttm(self):
-        self.ticker_info_df = self.ticker_info_df.sort_values(by=YEAR)
+        self.ticker_info_df = self.ticker_info_df.sort_values(by=YEAR_PERIOD)
         self.ticker_info_df[SUPPORTED_BASE_TTM_METRICS_LIST] = \
             self.ticker_info_df[SUPPORTED_BASE_TTM_METRICS_LIST].rolling(4).sum()
 
@@ -141,12 +155,48 @@ class Fundamentals:
         self.ticker_info_df[FREE_CASH_FLOW_YIELD_ADJUSTED] = \
             self.ticker_info_df[FREE_CASH_FLOW_ADJUSTED] / self.ticker_info_df[MARKET_CAPITALIZATION] * 100
 
-    def calculate_metrics(self, ttm_flag=False):
+    def calculate_pct_change_from_years_ago(self, data, years_ago, period, metrics_list):
+        year_today = pd.Timestamp.today().year
+        years_ago_year = year_today - years_ago
+        today_quarter = \
+            None if period == FY else data.loc[data[YEAR] == year_today].index.get_level_values(YEAR_PERIOD).values[-1].split("-")[-1]
+        work_df0 = data.loc[data[YEAR] == years_ago_year]
+        work_df1 = data.loc[data[YEAR] == year_today]
+        if today_quarter is None:
+            metrics_array0 = work_df0[metrics_list].values
+            metrics_array1 = work_df1[metrics_list].values
+        else:
+            metrics_array0 = work_df0[work_df0.index.get_level_values(PERIOD) == today_quarter][metrics_list].values
+            metrics_array1 = work_df1[work_df1.index.get_level_values(PERIOD) == today_quarter][metrics_list].values
+
+        pct_change_array = (metrics_array1 - metrics_array0) / metrics_array0 * 100
+        pct_change_array[np.isinf(pct_change_array)] = np.nan
+
+        return pct_change_array.flatten()
+
+    def calculate_stats(self, metrics_list):
+        df_pct_years_ago_list = []
+        for symbol in self.ticker_list:
+            curr_df = self.ticker_info_df[self.ticker_info_df.index.get_level_values(SYMBOL) == symbol]
+            pct_change_dict = defaultdict(list)
+            for years_ago in [20, 10, 5, 3, 1]:
+                pct_change_array = self.calculate_pct_change_from_years_ago(curr_df, years_ago, "quarter", metrics_list)
+                for metric, pct_change in zip(metrics_list, pct_change_array):
+                    pct_change_dict[metric].append(pct_change)
+                pct_change_dict["years_ago"].append(years_ago)
+                pct_change_dict[SYMBOL].append(symbol)
+            df_pct_years_ago_list.append(pd.DataFrame(pct_change_dict))
+        df_pct_years_ago = pd.concat(df_pct_years_ago_list, axis=0, ignore_index=True).set_index(SYMBOL)
+        return df_pct_years_ago
+
+    def calculate_metrics(self, metrics_list, ttm_flag=False):
         if ttm_flag:
             self.calculate_ttm()
         self.calculate_roce()
         self.calculate_margins()
         self.calculate_adjusted_fcf()
+        df_pct_years_ago = self.calculate_stats(metrics_list)
+        return df_pct_years_ago
 
 
 def _debug():
@@ -162,4 +212,3 @@ def _debug():
 if __name__ == "__main__":
     # entrypoint for debug
     _debug()
-

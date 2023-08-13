@@ -10,7 +10,8 @@ DATE = "date"
 SYMBOL = "symbol"
 PERIOD = "period"
 YEAR = "year"
-INDEX_KEYS_LIST = [YEAR, SYMBOL, PERIOD]
+YEAR_PERIOD = "year-period"
+INDEX_KEYS_LIST = [YEAR_PERIOD, SYMBOL, PERIOD]
 
 # fields from KEY_METRICS
 PE_RATIO = "peRatio"
@@ -55,6 +56,7 @@ FREE_CASH_FLOW_YIELD_ADJUSTED = "freeCashFlowYieldAdjusted"
 
 # other constants
 FY = "FY"
+QUARTER = "quarter"
 
 # constants
 SUPPORTED_BASE_TTM_METRICS_LIST = [REVENUE, GROSS_PROFIT, OPERATING_INCOME, NET_INCOME, COST_OF_REVENUE,
