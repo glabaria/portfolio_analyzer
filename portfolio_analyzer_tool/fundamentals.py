@@ -105,7 +105,7 @@ class Fundamentals:
                 # write statistics as text at the bottom of the plot
                 if symbol != "all":
                     curr_stats = df_pct_years_ago.loc[symbol, ["years_ago", field]].values
-                    text_str = "% Change:\n"
+                    text_str = "CAGR %:\n"
                     for row_ind in range(curr_stats.shape[0]):
                         if np.isnan(curr_stats[row_ind, 1]):
                             continue
