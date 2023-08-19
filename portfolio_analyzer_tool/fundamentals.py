@@ -13,7 +13,8 @@ from portfolio_analyzer_tool.constants import INDEX_KEYS_LIST, DATE, SYMBOL, YEA
     OPERATING_EXPENSES, TOTAL_ASSETS, TOTAL_CURRENT_LIABILITIES, GROSS_MARGIN, OPERATING_MARGIN, NET_MARGIN, \
     GROSS_PROFIT, OPERATING_INCOME, NET_INCOME, FREE_CASH_FLOW_ADJUSTED, FREE_CASH_FLOW_YIELD_ADJUSTED, \
     FREE_CASH_FLOW, STOCK_BASED_COMPENSATION, MARKET_CAPITALIZATION, PERIOD, SUPPORTED_BASE_TTM_METRICS_LIST, \
-    SUPPORTED_TTM_METRICS_LIST, YEAR_PERIOD, FY, QUARTER
+    SUPPORTED_TTM_METRICS_LIST, YEAR_PERIOD, FY, QUARTER, FREE_CASH_FLOW_ADJUSTED_PER_SHARE, FREE_CASH_FLOW_PER_SHARE, \
+    NUMBER_OF_SHARES, STOCK_BASED_COMPENSATION_AS_PCT_OF_FCF
 from portfolio_analyzer_tool.enum_types import Datasets, datasets_to_metrics_list_dict
 
 
@@ -53,7 +54,8 @@ class Fundamentals:
             if enterprise_value_df is not None:
                 # TODO: is there a better way to do this?  What happens if the DATE does not match up?
                 curr_ticker_work_df_list[0] = pd.merge(curr_ticker_work_df_list[0],
-                                                       enterprise_value_df[[MARKET_CAPITALIZATION, DATE]], on=[DATE])
+                                                       enterprise_value_df[[x for x in datasets_to_metrics_list_dict
+                                                       [Datasets.ENTERPRISE_VALUES] if x != SYMBOL]], on=[DATE])
             self._consolidate_dates(curr_ticker_work_df_list)
             curr_ticker_work_df_list = [df.set_index(INDEX_KEYS_LIST) for df in curr_ticker_work_df_list]
 
@@ -72,16 +74,25 @@ class Fundamentals:
         ticker_info_df = work_ticker_df[datasets_to_metrics_list_dict[Datasets(dataset)]]
         return ticker_info_df
 
-    def plot_fundamentals(self, field_list: List[str], save_results_path: str, ttm_flag: bool = False,
+    @staticmethod
+    def _year_period_key(x, ind):
+        if ind == 0:
+            x = x.apply(lambda s: s.split("-")[0])
+        else:
+            d = {"Q1": 1, "Q2": 2, "Q3": 3, "Q4": 4}
+            x = x.apply(lambda s: d[s.split("-")[1]])
+        return x
+
+    def plot_fundamentals(self, field_list: List[str], save_results_path: str, period: str, ttm_flag: bool = False,
                           df_pct_years_ago: Optional[pd.DataFrame] = None):
         for symbol in self.ticker_list + ["all"]:
             os.makedirs(os.path.join(save_results_path, symbol), exist_ok=True)
             mask = self.ticker_info_df.index.get_level_values("symbol") == symbol if symbol != "all" \
                 else np.ones(len(self.ticker_info_df), dtype=bool)
             work_df = self.ticker_info_df.loc[mask].reset_index()
-            work_df = work_df.sort_values(by=DATE)
+            work_df = work_df.sort_values(by=[YEAR, PERIOD])
             for field in field_list:
-                plt.figure(figsize=(14, 8))
+                plt.figure(figsize=(14 if period == FY else 31, 8))
                 if symbol != "all":
                     sns.barplot(data=work_df, x=YEAR_PERIOD, y=field, color="b")
                 else:
@@ -155,8 +166,20 @@ class Fundamentals:
         self.ticker_info_df[FREE_CASH_FLOW_YIELD_ADJUSTED] = \
             self.ticker_info_df[FREE_CASH_FLOW_ADJUSTED] / self.ticker_info_df[MARKET_CAPITALIZATION] * 100
 
+        # calculate per share
+        self.ticker_info_df[FREE_CASH_FLOW_PER_SHARE] = \
+            self.ticker_info_df[FREE_CASH_FLOW] / self.ticker_info_df[NUMBER_OF_SHARES]
+        self.ticker_info_df[FREE_CASH_FLOW_ADJUSTED_PER_SHARE] = \
+            self.ticker_info_df[FREE_CASH_FLOW_ADJUSTED] / self.ticker_info_df[NUMBER_OF_SHARES]
+
+        # calculate SBC as pct of FCF
+        self.ticker_info_df[STOCK_BASED_COMPENSATION_AS_PCT_OF_FCF] = \
+            self.ticker_info_df[STOCK_BASED_COMPENSATION] / self.ticker_info_df[FREE_CASH_FLOW] * 100
+
     def calculate_pct_change_from_years_ago(self, data, years_ago, period, metrics_list):
         year_today = pd.Timestamp.today().year
+        if year_today not in data[YEAR].unique():
+            year_today -= 1  # happens if current FY has not been reported yet
         years_ago_year = year_today - years_ago
         today_quarter = \
             None if period == FY else data.loc[data[YEAR] == year_today].index.get_level_values(YEAR_PERIOD).values[-1].split("-")[-1]
@@ -169,33 +192,37 @@ class Fundamentals:
             metrics_array0 = work_df0[work_df0.index.get_level_values(PERIOD) == today_quarter][metrics_list].values
             metrics_array1 = work_df1[work_df1.index.get_level_values(PERIOD) == today_quarter][metrics_list].values
 
-        pct_change_array = (metrics_array1 - metrics_array0) / metrics_array0 * 100
+        pct_change_array = ((metrics_array1 / metrics_array0) ** (1 / years_ago) - 1) * 100
         pct_change_array[np.isinf(pct_change_array)] = np.nan
 
         return pct_change_array.flatten()
 
-    def calculate_stats(self, metrics_list):
+    def calculate_stats(self, metrics_list, period):
         df_pct_years_ago_list = []
         for symbol in self.ticker_list:
             curr_df = self.ticker_info_df[self.ticker_info_df.index.get_level_values(SYMBOL) == symbol]
             pct_change_dict = defaultdict(list)
             for years_ago in [20, 10, 5, 3, 1]:
-                pct_change_array = self.calculate_pct_change_from_years_ago(curr_df, years_ago, "quarter", metrics_list)
-                for metric, pct_change in zip(metrics_list, pct_change_array):
-                    pct_change_dict[metric].append(pct_change)
+                pct_change_array = self.calculate_pct_change_from_years_ago(curr_df, years_ago, period, metrics_list)
+                if not len(pct_change_array):
+                    for metric in metrics_list:
+                        pct_change_dict[metric].append(np.nan)
+                else:
+                    for metric, pct_change in zip(metrics_list, pct_change_array):
+                        pct_change_dict[metric].append(pct_change)
                 pct_change_dict["years_ago"].append(years_ago)
                 pct_change_dict[SYMBOL].append(symbol)
             df_pct_years_ago_list.append(pd.DataFrame(pct_change_dict))
         df_pct_years_ago = pd.concat(df_pct_years_ago_list, axis=0, ignore_index=True).set_index(SYMBOL)
         return df_pct_years_ago
 
-    def calculate_metrics(self, metrics_list, ttm_flag=False):
+    def calculate_metrics(self, metrics_list, period, ttm_flag=False):
         if ttm_flag:
             self.calculate_ttm()
         self.calculate_roce()
         self.calculate_margins()
         self.calculate_adjusted_fcf()
-        df_pct_years_ago = self.calculate_stats(metrics_list)
+        df_pct_years_ago = self.calculate_stats(metrics_list, period)
         return df_pct_years_ago
 
 
