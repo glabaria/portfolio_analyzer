@@ -70,3 +70,4 @@ SUPPORTED_TTM_METRICS_LIST = SUPPORTED_BASE_TTM_METRICS_LIST + [GROSS_MARGIN, OP
                                                                 TOTAL_ASSETS, TOTAL_CURRENT_LIABILITIES,
                                                                 FREE_CASH_FLOW_PER_SHARE,
                                                                 FREE_CASH_FLOW_ADJUSTED_PER_SHARE]
+METRIC_FORMAT_DICT = {EPS_DILUTED: "2f", DIVIDEND_YIELD: "2f"}

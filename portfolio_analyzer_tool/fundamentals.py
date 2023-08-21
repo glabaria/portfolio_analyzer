@@ -14,7 +14,7 @@ from portfolio_analyzer_tool.constants import INDEX_KEYS_LIST, DATE, SYMBOL, YEA
     GROSS_PROFIT, OPERATING_INCOME, NET_INCOME, FREE_CASH_FLOW_ADJUSTED, FREE_CASH_FLOW_YIELD_ADJUSTED, \
     FREE_CASH_FLOW, STOCK_BASED_COMPENSATION, MARKET_CAPITALIZATION, PERIOD, SUPPORTED_BASE_TTM_METRICS_LIST, \
     SUPPORTED_TTM_METRICS_LIST, YEAR_PERIOD, FY, QUARTER, FREE_CASH_FLOW_ADJUSTED_PER_SHARE, FREE_CASH_FLOW_PER_SHARE, \
-    NUMBER_OF_SHARES, STOCK_BASED_COMPENSATION_AS_PCT_OF_FCF
+    NUMBER_OF_SHARES, STOCK_BASED_COMPENSATION_AS_PCT_OF_FCF, DIVIDEND_YIELD, METRIC_FORMAT_DICT
 from portfolio_analyzer_tool.enum_types import Datasets, datasets_to_metrics_list_dict
 
 
@@ -85,6 +85,10 @@ class Fundamentals:
 
     def plot_fundamentals(self, field_list: List[str], save_results_path: str, period: str, ttm_flag: bool = False,
                           df_pct_years_ago: Optional[pd.DataFrame] = None):
+
+        def _default_annotation(x):
+            return f"{x:.{METRIC_FORMAT_DICT.get(field, '1f')}}" if not np.isnan(x) else ""
+
         for symbol in self.ticker_list + ["all"]:
             os.makedirs(os.path.join(save_results_path, symbol), exist_ok=True)
             mask = self.ticker_info_df.index.get_level_values("symbol") == symbol if symbol != "all" \
@@ -94,7 +98,11 @@ class Fundamentals:
             for field in field_list:
                 plt.figure(figsize=(14 if period == FY else 31, 8))
                 if symbol != "all":
-                    sns.barplot(data=work_df, x=YEAR_PERIOD, y=field, color="b")
+                    g = sns.barplot(data=work_df, x=YEAR_PERIOD, y=field, color="b")
+                    g.axes.bar_label(g.axes.containers[-1],
+                                     labels=map(lambda x: self.format_number(x, _default_annotation),
+                                                g.axes.containers[-1].datavalues),
+                                     label_type='edge', rotation=90)
                 else:
                     g = sns.lineplot(data=work_df, x=YEAR_PERIOD, y=field, hue=SYMBOL, marker=".", linewidth=2,
                                      markersize=25)
@@ -142,6 +150,9 @@ class Fundamentals:
         response = urlopen(url, cafile=certifi.where())
         data = response.read().decode("utf-8")
         return json.loads(data)
+
+    def convert_ratio_to_pct(self):
+        self.ticker_info_df[DIVIDEND_YIELD] = self.ticker_info_df[DIVIDEND_YIELD] * 100
 
     def calculate_ttm(self):
         self.ticker_info_df = self.ticker_info_df.sort_values(by=YEAR_PERIOD)
@@ -223,7 +234,19 @@ class Fundamentals:
         self.calculate_margins()
         self.calculate_adjusted_fcf()
         df_pct_years_ago = self.calculate_stats(metrics_list, period)
+        self.convert_ratio_to_pct()
         return df_pct_years_ago
+
+    @staticmethod
+    def format_number(number, default_function=None):
+        if abs(number) >= 1e9:
+            return f"{round(number / 1e9, 2)}B"
+        elif abs(number) >= 1e6:
+            return f"{round(number / 1e6, 2)}M"
+        elif abs(number) >= 1e3:
+            return f"{round(number / 1e3, 2)}K"
+        else:
+            return str(number) if default_function is None else default_function(number)
 
 
 def _debug():
