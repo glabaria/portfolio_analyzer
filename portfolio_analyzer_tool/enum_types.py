@@ -5,7 +5,8 @@ from portfolio_analyzer_tool.constants import KEY_METRICS, SYMBOL, PE_RATIO, FRE
     GROSS_PROFIT_RATIO, OPERATING_INCOME, OPERATING_INCOME_RATIO, NET_INCOME, NET_INCOME_RATIO, EPS_DILUTED, \
     WEIGHTED_AVERAGE_SHARES_OUTSTANDING_DILUTED, COST_OF_REVENUE, OPERATING_EXPENSES, BALANCE_SHEET_STATEMENT, \
     TOTAL_ASSETS, TOTAL_CURRENT_LIABILITIES, CASH_FLOW_STATEMENT, FREE_CASH_FLOW, STOCK_BASED_COMPENSATION, \
-    ENTERPRISE_VALUES, MARKET_CAPITALIZATION, INDEX_KEYS_LIST, PERIOD, NUMBER_OF_SHARES
+    ENTERPRISE_VALUES, MARKET_CAPITALIZATION, INDEX_KEYS_LIST, PERIOD, NUMBER_OF_SHARES, MARKET_CAPITALIZATION_FIELD, \
+    MARKET_CAP, CALENDAR_YEAR
 
 
 class Datasets(Enum):
@@ -23,9 +24,11 @@ datasets_to_metrics_list_dict = {Datasets.KEY_METRICS: [PE_RATIO, FREE_CASH_FLOW
                                                              GROSS_PROFIT_RATIO, OPERATING_INCOME,
                                                              OPERATING_INCOME_RATIO, NET_INCOME, NET_INCOME_RATIO,
                                                              EPS_DILUTED, WEIGHTED_AVERAGE_SHARES_OUTSTANDING_DILUTED,
-                                                             COST_OF_REVENUE, OPERATING_EXPENSES, DATE, SYMBOL, PERIOD],
+                                                             COST_OF_REVENUE, OPERATING_EXPENSES, DATE, SYMBOL, PERIOD,
+                                                             CALENDAR_YEAR],
                                  Datasets.BALANCE_SHEET_STATEMENT: [TOTAL_ASSETS, TOTAL_CURRENT_LIABILITIES, DATE,
-                                                                    SYMBOL, PERIOD],
+                                                                    SYMBOL, PERIOD, CALENDAR_YEAR],
                                  Datasets.CASH_FLOW_STATEMENT: [FREE_CASH_FLOW, STOCK_BASED_COMPENSATION, DATE, SYMBOL,
-                                                                PERIOD],
-                                 Datasets.ENTERPRISE_VALUES: [MARKET_CAPITALIZATION, NUMBER_OF_SHARES, SYMBOL, DATE]}
+                                                                PERIOD, CALENDAR_YEAR],
+                                 Datasets.ENTERPRISE_VALUES: [MARKET_CAPITALIZATION_FIELD, NUMBER_OF_SHARES, SYMBOL,
+                                                              DATE]}

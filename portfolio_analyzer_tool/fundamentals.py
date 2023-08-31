@@ -14,7 +14,8 @@ from portfolio_analyzer_tool.constants import INDEX_KEYS_LIST, DATE, SYMBOL, YEA
     GROSS_PROFIT, OPERATING_INCOME, NET_INCOME, FREE_CASH_FLOW_ADJUSTED, FREE_CASH_FLOW_YIELD_ADJUSTED, \
     FREE_CASH_FLOW, STOCK_BASED_COMPENSATION, MARKET_CAPITALIZATION, PERIOD, SUPPORTED_BASE_TTM_METRICS_LIST, \
     SUPPORTED_TTM_METRICS_LIST, YEAR_PERIOD, FY, QUARTER, FREE_CASH_FLOW_ADJUSTED_PER_SHARE, FREE_CASH_FLOW_PER_SHARE, \
-    NUMBER_OF_SHARES, STOCK_BASED_COMPENSATION_AS_PCT_OF_FCF, DIVIDEND_YIELD, METRIC_FORMAT_DICT
+    NUMBER_OF_SHARES, STOCK_BASED_COMPENSATION_AS_PCT_OF_FCF, DIVIDEND_YIELD, METRIC_FORMAT_DICT, MARKET_CAP, \
+    CURR_MARKET_CAP, MARKET_CAPITALIZATION_FIELD, CALENDAR_YEAR
 from portfolio_analyzer_tool.enum_types import Datasets, datasets_to_metrics_list_dict
 
 
@@ -27,8 +28,8 @@ class Fundamentals:
     @staticmethod
     def _consolidate_dates(df_list):
         for df in df_list:
-            df[YEAR] = pd.to_datetime(df[DATE]).dt.year.to_numpy()
-            df[YEAR_PERIOD] = df[[YEAR, PERIOD]].apply(lambda x: f"{x[0]}-{x[1]}", axis=1).values
+            df[YEAR] = pd.to_datetime(df[CALENDAR_YEAR]).dt.year.to_numpy()
+            df[YEAR_PERIOD] = df[[CALENDAR_YEAR, PERIOD]].apply(lambda x: f"{x[0]}-{x[1]}", axis=1).values
 
     def gather_all_datasets(self, dataset_list: Optional[List[str]] = None, period: Optional[str] = None) -> None:
         """
@@ -48,28 +49,33 @@ class Fundamentals:
         ticker_info_df_list = []
         for ticker in self.ticker_list:
             if is_enterprise_values_requested:
-                enterprise_value_df = self.gather_dataset(ticker, Datasets.ENTERPRISE_VALUES.value, period)
+                enterprise_value_df = self.gather_dataset(ticker, Datasets.ENTERPRISE_VALUES.value, period=period)
 
-            curr_ticker_work_df_list = [self.gather_dataset(ticker, dataset, period) for dataset in dataset_list]
+            curr_ticker_work_df_list = [self.gather_dataset(ticker, dataset, period=period) for dataset in dataset_list]
             if enterprise_value_df is not None:
                 # TODO: is there a better way to do this?  What happens if the DATE does not match up?
                 curr_ticker_work_df_list[0] = pd.merge(curr_ticker_work_df_list[0],
                                                        enterprise_value_df[[x for x in datasets_to_metrics_list_dict
                                                        [Datasets.ENTERPRISE_VALUES] if x != SYMBOL]], on=[DATE])
-            self._consolidate_dates(curr_ticker_work_df_list)
-            curr_ticker_work_df_list = [df.set_index(INDEX_KEYS_LIST) for df in curr_ticker_work_df_list]
+            curr_ticker_work_df_list = [df.set_index([DATE, SYMBOL, PERIOD]) for df in curr_ticker_work_df_list]
 
             # drop DATE column from all but one dataset
+            # FIXME: make this more general
             curr_ticker_work_df_list = \
-                [df if i == 0 else df.drop([DATE, YEAR], axis=1) for i, df in enumerate(curr_ticker_work_df_list)]
+                [df if i <= 1 else df.drop([CALENDAR_YEAR], axis=1)
+                 for i, df in enumerate(curr_ticker_work_df_list)]
 
             curr_ticker_work_df = curr_ticker_work_df_list[0].join(curr_ticker_work_df_list[1:], how="outer")
+            curr_ticker_work_df.reset_index(inplace=True)
+            self._consolidate_dates([curr_ticker_work_df])
+            curr_ticker_work_df.set_index(INDEX_KEYS_LIST, inplace=True)
             ticker_info_df_list.append(curr_ticker_work_df)
 
         self.ticker_info_df = pd.concat(ticker_info_df_list, axis=0)
 
-    def gather_dataset(self, ticker: str, dataset: str, period: str) -> pd.DataFrame:
-        json_data = self.get_jsonparsed_data(dataset, ticker, self.key, period=period)
+    def gather_dataset(self, ticker: str, dataset: str, period: Optional[str] = None) -> pd.DataFrame:
+        kwargs = dict(period=period) if period is not None else {}
+        json_data = self.get_jsonparsed_data(dataset, ticker, self.key, **kwargs)
         work_ticker_df = pd.DataFrame.from_records(json_data)
         ticker_info_df = work_ticker_df[datasets_to_metrics_list_dict[Datasets(dataset)]]
         return ticker_info_df
@@ -175,7 +181,7 @@ class Fundamentals:
         self.ticker_info_df[FREE_CASH_FLOW_ADJUSTED] = \
             self.ticker_info_df[FREE_CASH_FLOW] - self.ticker_info_df[STOCK_BASED_COMPENSATION]
         self.ticker_info_df[FREE_CASH_FLOW_YIELD_ADJUSTED] = \
-            self.ticker_info_df[FREE_CASH_FLOW_ADJUSTED] / self.ticker_info_df[MARKET_CAPITALIZATION] * 100
+            self.ticker_info_df[FREE_CASH_FLOW_ADJUSTED] / self.ticker_info_df[MARKET_CAPITALIZATION_FIELD] * 100
 
         # calculate per share
         self.ticker_info_df[FREE_CASH_FLOW_PER_SHARE] = \

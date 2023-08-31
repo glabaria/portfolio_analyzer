@@ -4,6 +4,7 @@ INCOME_STATEMENT = "income-statement"
 BALANCE_SHEET_STATEMENT = "balance-sheet-statement"
 CASH_FLOW_STATEMENT = "cash-flow-statement"
 ENTERPRISE_VALUES = "enterprise-values"
+MARKET_CAPITALIZATION = "market-capitalization"
 
 # index keys
 DATE = "date"
@@ -11,6 +12,7 @@ SYMBOL = "symbol"
 PERIOD = "period"
 YEAR = "year"
 YEAR_PERIOD = "year-period"
+CALENDAR_YEAR = "calendarYear"
 INDEX_KEYS_LIST = [YEAR_PERIOD, SYMBOL, PERIOD]
 
 # fields from KEY_METRICS
@@ -44,8 +46,12 @@ FREE_CASH_FLOW = "freeCashFlow"
 STOCK_BASED_COMPENSATION = "stockBasedCompensation"
 
 # fields from ENTERPRISE_VALUES
-MARKET_CAPITALIZATION = "marketCapitalization"
+MARKET_CAPITALIZATION_FIELD = "marketCapitalization"
 NUMBER_OF_SHARES = "numberOfShares"
+
+# fields from MARKET-CAPITALIZATION
+MARKET_CAP = "marketCap"
+CURR_MARKET_CAP = "currMarketCap"
 
 # calculated fields
 GROSS_MARGIN = "grossMargin"
@@ -70,4 +76,4 @@ SUPPORTED_TTM_METRICS_LIST = SUPPORTED_BASE_TTM_METRICS_LIST + [GROSS_MARGIN, OP
                                                                 TOTAL_ASSETS, TOTAL_CURRENT_LIABILITIES,
                                                                 FREE_CASH_FLOW_PER_SHARE,
                                                                 FREE_CASH_FLOW_ADJUSTED_PER_SHARE]
-METRIC_FORMAT_DICT = {EPS_DILUTED: "2f", DIVIDEND_YIELD: "2f"}
+METRIC_FORMAT_DICT = {EPS_DILUTED: "2f", DIVIDEND_YIELD: "2f", FREE_CASH_FLOW_ADJUSTED_PER_SHARE: "2f"}
