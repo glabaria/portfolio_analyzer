@@ -28,6 +28,7 @@ class Fundamentals:
     @staticmethod
     def _consolidate_dates(df_list):
         for df in df_list:
+            df.dropna(subset=CALENDAR_YEAR, inplace=True)
             df[YEAR] = pd.to_datetime(df[CALENDAR_YEAR]).dt.year.to_numpy()
             df[YEAR_PERIOD] = df[[CALENDAR_YEAR, PERIOD]].apply(lambda x: f"{x[0]}-{x[1]}", axis=1).values
 
