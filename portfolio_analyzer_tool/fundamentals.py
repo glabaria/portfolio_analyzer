@@ -91,7 +91,7 @@ class Fundamentals:
         return x
 
     def plot_fundamentals(self, field_list: List[str], save_results_path: str, period: str, ttm_flag: bool = False,
-                          df_pct_years_ago: Optional[pd.DataFrame] = None):
+                          df_pct_years_ago: Optional[pd.DataFrame] = None, df_stats: Optional[pd.DataFrame] = None):
 
         def _default_annotation(x):
             return f"{x:.{METRIC_FORMAT_DICT.get(field, '1f')}}" if not np.isnan(x) else ""
@@ -119,12 +119,20 @@ class Fundamentals:
 
                 # write statistics as text at the bottom of the plot
                 if symbol != "all":
-                    curr_stats = df_pct_years_ago.loc[symbol, ["years_ago", field]].values
-                    text_str = "CAGR %:\n"
-                    for row_ind in range(curr_stats.shape[0]):
-                        if np.isnan(curr_stats[row_ind, 1]):
-                            continue
-                        text_str += f"{int(curr_stats[row_ind, 0])} years: {curr_stats[row_ind, 1]:.2f}%\n"
+                    text_str = ""
+                    if df_pct_years_ago is not None:
+                        curr_stats = df_pct_years_ago.loc[symbol, ["years_ago", field]].values
+                        text_str += "CAGR %:\n"
+                        for row_ind in range(curr_stats.shape[0]):
+                            if np.isnan(curr_stats[row_ind, 1]):
+                                continue
+                            text_str += f"{int(curr_stats[row_ind, 0])} years: {curr_stats[row_ind, 1]:.2f}%\n"
+                    if df_stats is not None:
+                        text_str += "\n"
+                        stats_list = df_stats.loc[symbol].index.values
+                        for stat in stats_list:
+                            value = df_stats.loc[(symbol, stat), field]
+                            text_str += f"{stat}: {self.format_number(value, _default_annotation)}\n"
 
                     plt.gcf().text(0.3, 0.85, text_str)
                 plt.savefig(os.path.join(save_results_path, symbol,
@@ -217,9 +225,17 @@ class Fundamentals:
 
     def calculate_stats(self, metrics_list, period):
         df_pct_years_ago_list = []
+        df_stats_list = []
         for symbol in self.ticker_list:
             curr_df = self.ticker_info_df[self.ticker_info_df.index.get_level_values(SYMBOL) == symbol]
             pct_change_dict = defaultdict(list)
+            stats_df = curr_df[metrics_list].median().to_frame("median")
+            stats_df = stats_df.join(curr_df[metrics_list].quantile(q=0.05).to_frame("5th-percentile"))
+            stats_df = stats_df.join(curr_df[metrics_list].quantile(q=0.95).to_frame("95th-percentile"))
+            stats_df.columns = pd.MultiIndex.from_tuples([(symbol, x) for x in stats_df.columns.values])
+            df_stats_list.append(stats_df.T)
+
+            # calculate year ago calculations
             for years_ago in [20, 10, 5, 3, 1]:
                 pct_change_array = self.calculate_pct_change_from_years_ago(curr_df, years_ago, period, metrics_list)
                 if not len(pct_change_array):
@@ -232,7 +248,8 @@ class Fundamentals:
                 pct_change_dict[SYMBOL].append(symbol)
             df_pct_years_ago_list.append(pd.DataFrame(pct_change_dict))
         df_pct_years_ago = pd.concat(df_pct_years_ago_list, axis=0, ignore_index=True).set_index(SYMBOL)
-        return df_pct_years_ago
+        df_stats = pd.concat(df_stats_list, axis=0)
+        return df_pct_years_ago, df_stats
 
     def calculate_metrics(self, metrics_list, period, ttm_flag=False):
         if ttm_flag:
@@ -240,9 +257,9 @@ class Fundamentals:
         self.calculate_roce()
         self.calculate_margins()
         self.calculate_adjusted_fcf()
-        df_pct_years_ago = self.calculate_stats(metrics_list, period)
+        df_pct_years_ago, df_stats = self.calculate_stats(metrics_list, period)
         self.convert_ratio_to_pct()
-        return df_pct_years_ago
+        return df_pct_years_ago, df_stats
 
     @staticmethod
     def format_number(number, default_function=None):

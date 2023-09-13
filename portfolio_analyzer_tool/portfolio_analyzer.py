@@ -462,12 +462,12 @@ class PortfolioAnalyzer:
             fundamental_fields_list = self.fundamental_data.split(",")
             fundamentals = Fundamentals(list(self.portfolio_dict.keys()), key)
             fundamentals.gather_all_datasets(period=self.period)
-            df_pct_years_ago = \
+            df_pct_years_ago, df_stats = \
                 fundamentals.calculate_metrics(metrics_list=fundamental_fields_list, period=self.period,
                                                ttm_flag=self.ttm_flag)
             fundamentals.plot_fundamentals(fundamental_fields_list, self.save_file_path, self.period,
                                            ttm_flag=self.ttm_flag,
-                                           df_pct_years_ago=df_pct_years_ago)
+                                           df_pct_years_ago=df_pct_years_ago, df_stats=df_stats)
 
 
 def run_portfolio_analyzer():
