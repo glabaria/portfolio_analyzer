@@ -7,6 +7,7 @@ import seaborn as sns
 import datetime
 
 from portfolio_analyzer_tool.fundamentals import Fundamentals
+from portfolio_analyzer_tool.constants import MARKET_CAPITALIZATION
 
 DEPOSIT_DESCRIPTION_LIST = ['ELECTRONIC NEW ACCOUNT FUNDING', 'CLIENT REQUESTED ELECTRONIC FUNDING RECEIPT (FUNDS NOW)']
 WITHDRAW_DESCRIPTION_LIST = ["CLIENT REQUESTED ELECTRONIC FUNDING DISBURSEMENT (FUNDS NOW)"]
@@ -462,6 +463,7 @@ class PortfolioAnalyzer:
             fundamental_fields_list = self.fundamental_data.split(",")
             fundamentals = Fundamentals(list(self.portfolio_dict.keys()), key)
             fundamentals.gather_all_datasets(period=self.period)
+            fundamentals.gather_current_datasets([MARKET_CAPITALIZATION])
             df_pct_years_ago, df_stats = \
                 fundamentals.calculate_metrics(metrics_list=fundamental_fields_list, period=self.period,
                                                ttm_flag=self.ttm_flag)

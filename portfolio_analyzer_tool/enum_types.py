@@ -15,6 +15,7 @@ class Datasets(Enum):
     BALANCE_SHEET_STATEMENT = BALANCE_SHEET_STATEMENT
     CASH_FLOW_STATEMENT = CASH_FLOW_STATEMENT
     ENTERPRISE_VALUES = ENTERPRISE_VALUES
+    MARKET_CAPITALIZATION = MARKET_CAPITALIZATION
 
 
 datasets_to_metrics_list_dict = {Datasets.KEY_METRICS: [PE_RATIO, FREE_CASH_FLOW_YIELD,
@@ -31,4 +32,5 @@ datasets_to_metrics_list_dict = {Datasets.KEY_METRICS: [PE_RATIO, FREE_CASH_FLOW
                                  Datasets.CASH_FLOW_STATEMENT: [FREE_CASH_FLOW, STOCK_BASED_COMPENSATION, DATE, SYMBOL,
                                                                 PERIOD, CALENDAR_YEAR],
                                  Datasets.ENTERPRISE_VALUES: [MARKET_CAPITALIZATION_FIELD, NUMBER_OF_SHARES, SYMBOL,
-                                                              DATE]}
+                                                              DATE],
+                                 Datasets.MARKET_CAPITALIZATION: [SYMBOL, MARKET_CAP]}

@@ -24,6 +24,7 @@ class Fundamentals:
         self.ticker_info_df = None
         self.ticker_list = ticker_list
         self.key = key
+        self.current_ticker_info_df = None
 
     @staticmethod
     def _consolidate_dates(df_list):
@@ -31,6 +32,16 @@ class Fundamentals:
             df.dropna(subset=CALENDAR_YEAR, inplace=True)
             df[YEAR] = pd.to_datetime(df[CALENDAR_YEAR]).dt.year.to_numpy()
             df[YEAR_PERIOD] = df[[CALENDAR_YEAR, PERIOD]].apply(lambda x: f"{x[0]}-{x[1]}", axis=1).values
+
+    def gather_current_datasets(self, dataset_list: List[str]) -> None:
+        """ Gathers metrics for the current day.  Returns DataFrame of symbol | metric1 | metric 2 | ... | metric n """
+        ticker_info_df_list = []
+        for ticker in self.ticker_list:
+            curr_ticker_work_df_list = [self.gather_dataset(ticker, dataset) for dataset in dataset_list]
+            curr_ticker_work_df_list = [df.set_index([SYMBOL]) for df in curr_ticker_work_df_list]
+            curr_ticker_work_df = curr_ticker_work_df_list[0].join(curr_ticker_work_df_list[1:], how="outer")
+            ticker_info_df_list.append(curr_ticker_work_df)
+        self.current_ticker_info_df = pd.concat(ticker_info_df_list, axis=0)
 
     def gather_all_datasets(self, dataset_list: Optional[List[str]] = None, period: Optional[str] = None) -> None:
         """
@@ -40,7 +51,8 @@ class Fundamentals:
         """
         is_enterprise_values_requested = False
         if dataset_list is None:
-            dataset_list = [dataset.value for dataset in Datasets if dataset != Datasets.ENTERPRISE_VALUES]
+            dataset_list = [dataset.value for dataset in Datasets if dataset not in
+                            [Datasets.ENTERPRISE_VALUES, Datasets.MARKET_CAPITALIZATION]]
         if Datasets.ENTERPRISE_VALUES in Datasets:
             is_enterprise_values_requested = True
 
@@ -74,9 +86,9 @@ class Fundamentals:
 
         self.ticker_info_df = pd.concat(ticker_info_df_list, axis=0)
 
-    def gather_dataset(self, ticker: str, dataset: str, period: Optional[str] = None) -> pd.DataFrame:
-        kwargs = dict(period=period) if period is not None else {}
-        json_data = self.get_jsonparsed_data(dataset, ticker, self.key, **kwargs)
+    def gather_dataset(self, ticker: str, dataset: str, period: Optional[str] = None, **kwargs) -> pd.DataFrame:
+        kwargs_to_use = dict(period=period, **kwargs) if period is not None else kwargs if kwargs is not None else {}
+        json_data = self.get_jsonparsed_data(dataset, ticker, self.key, **kwargs_to_use)
         work_ticker_df = pd.DataFrame.from_records(json_data)
         ticker_info_df = work_ticker_df[datasets_to_metrics_list_dict[Datasets(dataset)]]
         return ticker_info_df
@@ -117,7 +129,7 @@ class Fundamentals:
                 plt.xticks(rotation=90)
                 plt.title(f"{field}{'(TTM)' if ttm_flag and field in SUPPORTED_TTM_METRICS_LIST else ''}")
 
-                # write statistics as text at the bottom of the plot
+                # write statistics as text at the top of the plot
                 if symbol != "all":
                     text_str = ""
                     if df_pct_years_ago is not None:
@@ -133,8 +145,11 @@ class Fundamentals:
                         for stat in stats_list:
                             value = df_stats.loc[(symbol, stat), field]
                             text_str += f"{stat}: {self.format_number(value, _default_annotation)}\n"
+                    if self.current_ticker_info_df is not None and field == FREE_CASH_FLOW_YIELD_ADJUSTED:
+                        value = self.current_ticker_info_df.loc[symbol, field]
+                        text_str += f"today: {self.format_number(value, _default_annotation)}"
 
-                    plt.gcf().text(0.3, 0.85, text_str)
+                    plt.gcf().text(0.2, 0.85, text_str)
                 plt.savefig(os.path.join(save_results_path, symbol,
                                          f"{field}{'_ttm' if ttm_flag and field in SUPPORTED_TTM_METRICS_LIST else ''}.png"),
                             dpi=300, bbox_inches="tight")
@@ -201,6 +216,17 @@ class Fundamentals:
         # calculate SBC as pct of FCF
         self.ticker_info_df[STOCK_BASED_COMPENSATION_AS_PCT_OF_FCF] = \
             self.ticker_info_df[STOCK_BASED_COMPENSATION] / self.ticker_info_df[FREE_CASH_FLOW] * 100
+
+        # calculate current free cash flow yield
+        self.current_ticker_info_df = \
+            pd.merge(self.current_ticker_info_df,
+                     self.ticker_info_df.reset_index()[[SYMBOL, FREE_CASH_FLOW_ADJUSTED]]
+                     .groupby(SYMBOL).tail(1),
+                     on="symbol", how="left")
+        self.current_ticker_info_df[FREE_CASH_FLOW_YIELD_ADJUSTED] = \
+            self.current_ticker_info_df[FREE_CASH_FLOW_ADJUSTED] / self.current_ticker_info_df[MARKET_CAP] * 100
+        del self.current_ticker_info_df[FREE_CASH_FLOW_ADJUSTED]
+        self.current_ticker_info_df.set_index(SYMBOL, inplace=True)
 
     def calculate_pct_change_from_years_ago(self, data, years_ago, period, metrics_list):
         year_today = pd.Timestamp.today().year
