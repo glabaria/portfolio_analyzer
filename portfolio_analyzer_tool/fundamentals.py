@@ -187,7 +187,8 @@ class Fundamentals:
     def calculate_ttm(self):
         self.ticker_info_df = self.ticker_info_df.sort_values(by=YEAR_PERIOD)
         self.ticker_info_df[SUPPORTED_BASE_TTM_METRICS_LIST] = \
-            self.ticker_info_df[SUPPORTED_BASE_TTM_METRICS_LIST].rolling(4).sum()
+            self.ticker_info_df[SUPPORTED_BASE_TTM_METRICS_LIST].groupby(SYMBOL, as_index=False).rolling(4).sum()\
+                .drop(columns=[SYMBOL])
 
     def calculate_roce(self):
         ebit = self.ticker_info_df[REVENUE] - self.ticker_info_df[COST_OF_REVENUE] - \
